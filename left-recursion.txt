@@ -1,0 +1,14 @@
+S T U
+a b c
+S S a
+S T b
+S U c
+S a
+T S c
+T T a
+T U b
+T b
+U S b
+U T c
+U U a
+U c

@@ -13,7 +13,7 @@ int getIndexOfSymbol(Symbol *symbols, const char *symbolName);
 void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****ruleBodiesArray);
 int *concat(int *arr1, int *arr2);
 int *flattenWithSingleRule(int *previousRule, int *laterRule);
-void flattenWithMultipleRules(int ***result, int **previousRules, int *laterRule);
+void flattenWithMultipleRules(int **result, int **previousRules, int *laterRule);
 void printGrammarInfo(Symbol *symbols, int ***ruleBodies);
 void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules);
 void freeRuleBodies(int ***ruleBodies);
@@ -25,6 +25,7 @@ int main(void) {
     int ***ruleBodies;
 
     parseFromGrammarFile("left-recursion.txt", &symbols, &ruleBodies);
+    printf("Symbol: %s\n", symbols[1].name);
     printGrammarInfo(symbols, ruleBodies);
 
     eliminateLeftRecursion(symbols, ruleBodies);
@@ -84,7 +85,7 @@ void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, in
     int ***ruleBodies = NULL;
 
     {
-        Symbol dummyStart = {"_S", 0};
+        Symbol dummyStart = {"S'", 0};
 
         arrput(symbols, dummyStart);
     }
@@ -195,15 +196,16 @@ int *concat(int *arr1, int *arr2) {
 
 int *flattenWithSingleRule(int *previousRule, int *laterRule) {
     int *flattenedRule;
+    arrdel(laterRule, 0);
     flattenedRule = concat(previousRule, laterRule);
+
     return flattenedRule;
 }
 
-void flattenWithMultipleRules(int ***result, int **previousRules, int *laterRule) {
+void flattenWithMultipleRules(int **result, int **previousRules, int *laterRule) {
     int i;
-    arrdel(laterRule, 0);
     for (i = 0; i < arrlen(previousRules); ++i) {
-        arrput(*result, flattenWithSingleRule(previousRules[i], laterRule));
+        arrput(result, flattenWithSingleRule(previousRules[i], laterRule));
     }
 }
 
@@ -266,113 +268,28 @@ int ***copyRules(int ***rules) {
 void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules) {
     Symbol *symbols = copySymbols(originalSymbols);
     int ***rules = copyRules(originalRules);
-    int variableCount = 0;
+
     int variableIndex;
-
-    {
-        int i;
-        for (i = 0; i < arrlen(symbols) && !symbols[i].isTerminal; ++i) ++variableCount;
-    }
-
-
-    for (variableIndex = 0; variableIndex < arrlen(originalRules); ++variableIndex) {
+    for (variableIndex = 0; variableIndex < arrlen(rules); ++variableIndex) {
+        int **rulesForThisVariable = rules[variableIndex];
         int ruleIndex;        
         int **modifiedRules = NULL;
-        for (ruleIndex = 0; ruleIndex < arrlen(rules[variableIndex]); ++ruleIndex) {
-            int *rule = rules[variableIndex][ruleIndex];
+        for (ruleIndex = 0; ruleIndex < arrlen(rulesForThisVariable); ++ruleIndex) {
+            int *rule = rulesForThisVariable[ruleIndex];
             int firstVariableInRule = rule[0];
             if (firstVariableInRule < variableIndex) {
-                flattenWithMultipleRules(&modifiedRules, rules[firstVariableInRule], rule);
-                arrfree(rule);
+                printf("%d %d %d\n", variableIndex, ruleIndex, firstVariableInRule);
+                flattenWithMultipleRules(modifiedRules, rules[firstVariableInRule], rule);
+                puts("here?");
             }
             else arrput(modifiedRules, rule);
+            puts("done putting in modified rules");
 
+            arrfree(rule);
         }
-        arrfree(rules[variableIndex]);
+        arrfree(rulesForThisVariable);
         rules[variableIndex] = modifiedRules;
-
-        if (variableIndex == 1) {
-            puts("###################");
-            printGrammarInfo(symbols, rules);
-        }
-
-        {
-            int **recursiveRules = NULL;
-            for (ruleIndex = arrlen(rules[variableIndex]) - 1; ruleIndex >= 0; --ruleIndex) {
-                int *rule = rules[variableIndex][ruleIndex];
-                int firstVariableInRule = rule[0];
-                if (firstVariableInRule == variableIndex) {
-                    arrdel(rule, 0);
-                    arrput(recursiveRules, rule);
-                    arrdel(rules[variableIndex], ruleIndex);
-                }
-            }
-
-            if (arrlen(recursiveRules)) {
-                Symbol extraSymbol;
-                extraSymbol.name[0] = '\0';
-                strcpy(extraSymbol.name, symbols[variableIndex].name);
-                strcat(extraSymbol.name, "'");
-                extraSymbol.isTerminal = 0; 
-                arrins(symbols, variableCount, extraSymbol);
-                ++variableCount;
-                
-                {
-                    int i;
-                    for (i = 0; i < arrlen(recursiveRules); ++i) {
-                        int j;
-                        for (j = 0; j < arrlen(recursiveRules[i]); ++j) {
-                            if (recursiveRules[i][j] >= variableCount - 1) ++recursiveRules[i][j];
-                        }
-                    }
-                }
-
-                {
-                    int i;
-                    for (i = 0; i < arrlen(rules); ++i) {
-                        int j;
-                        for (j = 0; j < arrlen(rules[i]); ++j) {
-                            int k;
-                            for (k = 0; k < arrlen(rules[i][j]); ++k) {
-                                if (rules[i][j][k] >= variableCount - 1) ++rules[i][j][k];
-                            }
-                        }
-                    }
-                }
-
-                {
-                    int i;
-                    for (i = 0; i < arrlen(rules[variableIndex]); ++i) {
-                        arrput(rules[variableIndex][i], variableCount - 1);
-                    }
-                }
-                arrput(rules, NULL);
-                {
-                    int i;
-                    for (i = 0; i < arrlen(recursiveRules); ++i) {
-                       arrput(recursiveRules[i], variableCount - 1);
-                       arrput(rules[arrlen(rules) - 1], recursiveRules[i]);
-                    }
-                }
-
-                {
-                    int *nullRule = NULL;
-                    arrput(nullRule, arrlen(symbols) - 2);
-                    arrput(rules[arrlen(rules) - 1], nullRule);
-                }
-            }
-
-        }
-
-        if (variableIndex == 1) {
-            puts("###################");
-            printGrammarInfo(symbols, rules);
-        }
-
     }
-
-    puts("FINAL.........");
-    printGrammarInfo(symbols, rules);
 
     arrfree(symbols);
     freeRuleBodies(rules);
