@@ -13,18 +13,42 @@ int getIndexOfSymbol(Symbol *symbols, const char *symbolName);
 void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****ruleBodiesArray);
 int *concat(int *arr1, int *arr2);
 int *flattenWithSingleRule(int *previousRule, int *laterRule);
-void flattenWithMultipleRules(int **result, int **previousRules, int *laterRule);
-
-void printGrammarInfo(Symbol *symbols, int ***ruleBodies);
+int **flattenWithMultipleRules(int **previousRules, int *laterRule);
 
 int main(void) {
     Symbol *symbols;
     int ***ruleBodies;
 
     parseFromGrammarFile("grammar.txt", &symbols, &ruleBodies);
-    
-    printGrammarInfo(symbols, ruleBodies);
-    
+
+    {
+        int i;
+        for (i = 0; i < arrlen(symbols); ++i) {
+            printf("%s : %s\n", symbols[i].name, symbols[i].isTerminal? "terminal" : "non-terminal");
+        }
+    }
+
+    {
+        int i;
+        for (i = 0; i < arrlen(ruleBodies); ++i) {
+            int **bodies = ruleBodies[i];
+            {
+                int k;
+                for (k = 0; k < arrlen(bodies); ++k) {
+                    int *body = bodies[k];
+                    printf("%s -> ", symbols[i].name);
+                    {
+                        int j;
+                        for (j = 0; j < arrlen(body); ++j) {
+                            printf("%s", symbols[body[j]].name);
+                        }
+                    }
+                    printf("\n");
+                }
+            }
+        }
+    }
+
     arrfree(symbols);
     {
         int i;
@@ -191,39 +215,9 @@ int *flattenWithSingleRule(int *previousRule, int *laterRule) {
     return flattenedRule;
 }
 
-void flattenWithMultipleRules(int **result, int **previousRules, int *laterRule) {
+int **flattenWithMultipleRules(int **result, int **previousRules, int *laterRule) {
     int i;
     for (i = 0; i < arrlen(previousRules); ++i) {
         arrput(result, flattenWithSingleRule(previousRules[i], laterRule));
-    }
-}
-
-void printGrammarInfo(Symbol *symbols, int ***ruleBodies) {
-    {
-        int i;
-        for (i = 0; i < arrlen(symbols); ++i) {
-            printf("%s : %s\n", symbols[i].name, symbols[i].isTerminal? "terminal" : "non-terminal");
-        }
-    }
-
-    {
-        int i;
-        for (i = 0; i < arrlen(ruleBodies); ++i) {
-            int **bodies = ruleBodies[i];
-            {
-                int k;
-                for (k = 0; k < arrlen(bodies); ++k) {
-                    int *body = bodies[k];
-                    printf("%s -> ", symbols[i].name);
-                    {
-                        int j;
-                        for (j = 0; j < arrlen(body); ++j) {
-                            printf("%s", symbols[body[j]].name);
-                        }
-                    }
-                    printf("\n");
-                }
-            }
-        }
     }
 }
