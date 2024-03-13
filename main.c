@@ -12,8 +12,6 @@
 #define MAX_SYMBOL_COUNT 500
 #define MAX_RULE_COUNT 1000
 
-void printProductionRule(Symbol *symbols, ProductionRuleBody *bodies, ProductionRule *rule);
-
 char **split(char *string, const char *delimeter);
 char *strdup(const char *string);
 int getIndexOfSymbol(Symbol *symbols, const char *symbolName);
