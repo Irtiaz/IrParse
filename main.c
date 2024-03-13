@@ -6,11 +6,6 @@
 #include <string.h>
 
 #include "Symbol.h"
-#include "ProductionRuleBody.h"
-#include "ProductionRule.h"
-
-#define MAX_SYMBOL_COUNT 500
-#define MAX_RULE_COUNT 1000
 
 char **split(char *string, const char *delimeter);
 char *strdup(const char *string);
@@ -19,7 +14,6 @@ int getIndexOfSymbol(Symbol *symbols, const char *symbolName);
 void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****ruleBodiesArray);
 
 int main(void) {
-    
     Symbol *symbols;
     int ***ruleBodies;
 
