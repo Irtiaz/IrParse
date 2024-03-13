@@ -16,12 +16,12 @@ char **split(char *string, const char *delimeter);
 char *strdup(const char *string);
 int getIndexOfSymbol(Symbol *symbols, const char *symbolName);
 
-void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, ProductionRuleBody ***ruleBodiesArray);
+void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****ruleBodiesArray);
 
 int main(void) {
     
     Symbol *symbols;
-    ProductionRuleBody **ruleBodies;
+    int ***ruleBodies;
 
     parseFromGrammarFile("grammar.txt", &symbols, &ruleBodies);
 
@@ -35,16 +35,16 @@ int main(void) {
     {
         int i;
         for (i = 0; i < arrlen(ruleBodies); ++i) {
-            ProductionRuleBody *bodies = ruleBodies[i];
+            int **bodies = ruleBodies[i];
             {
                 int k;
                 for (k = 0; k < arrlen(bodies); ++k) {
-                    ProductionRuleBody body = bodies[k];
-                    printf("%s -> ", symbols[body.variableIndex].name);
+                    int *body = bodies[k];
+                    printf("%s -> ", symbols[i].name);
                     {
                         int j;
-                        for (j = 0; j < body.derivationArrayLength; ++j) {
-                            printf("%s", symbols[body.derivationArray[j]].name);
+                        for (j = 0; j < arrlen(body); ++j) {
+                            printf("%s", symbols[body[j]].name);
                         }
                     }
                     printf("\n");
@@ -57,6 +57,10 @@ int main(void) {
     {
         int i;
         for (i = 0; i < arrlen(ruleBodies); ++i) {
+            int j;
+            for (j = 0; j < arrlen(ruleBodies[i]); ++j) {
+                arrfree(ruleBodies[i][j]);
+            }
             arrfree(ruleBodies[i]);
         }
         arrfree(ruleBodies);
@@ -97,9 +101,9 @@ int getIndexOfSymbol(Symbol *symbols, const char *symbolName) {
     return -1;
 }
 
-void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, ProductionRuleBody ***ruleBodiesArray) {
+void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****ruleBodiesArray) {
     Symbol *symbols = NULL;
-    ProductionRuleBody **ruleBodies = NULL;
+    int ***ruleBodies = NULL;
 
     {
         Symbol dummyStart = {"S'", 0};
@@ -162,28 +166,27 @@ void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, Pr
                 arrput(ruleBodies, NULL);
             }
         }
-
-
-
-        {
-            ProductionRuleBody dummyStartToActualStartBody = {0, {3}, 1};
-            arrput(ruleBodies[0], dummyStartToActualStartBody);
-        }
         
+        {
+            int *dummyStartToActualStartRuleDerivation = NULL;
+            arrput(dummyStartToActualStartRuleDerivation, 3);
+            arrput(ruleBodies[0], dummyStartToActualStartRuleDerivation);
+        }
+
         while (fscanf(grammarFile, "%[^(\r)?\n]s", line) != EOF) {
             char **array = split(line, " ");
+            int *ruleDerivationArray = NULL;
             int i;
-            ProductionRuleBody body;
-            body.variableIndex = getIndexOfSymbol(symbols, array[0]);
-            body.derivationArrayLength = 0;
-            free(array[0]);
-            for (i = 1; i < arrlen(array); ++i) {
-                body.derivationArray[body.derivationArrayLength++] = getIndexOfSymbol(symbols, array[i]);
 
+            int variableIndex = getIndexOfSymbol(symbols, array[0]);
+            free(array[0]);
+
+            for (i = 1; i < arrlen(array); ++i) {
+                arrput(ruleDerivationArray, getIndexOfSymbol(symbols, array[i]));
                 free(array[i]);
             }
 
-            arrput(ruleBodies[body.variableIndex], body);
+            arrput(ruleBodies[variableIndex], ruleDerivationArray);
 
             arrfree(array);
             fgetc(grammarFile);
