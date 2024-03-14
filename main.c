@@ -15,7 +15,7 @@ int *concat(int *arr1, int *arr2);
 int *flattenWithSingleRule(int *previousRule, int *laterRule);
 void flattenWithMultipleRules(int ***result, int **previousRules, int *laterRule);
 void printGrammarInfo(Symbol *symbols, int ***ruleBodies, int ruleBreakPoint);
-void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules);
+void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbol **modifiedSymbols, int ****rulesAfterElimination);
 void freeRuleBodies(int ***ruleBodies);
 Symbol *copySymbols(Symbol *symbols);
 int ***copyRules(int ***rules);
@@ -27,7 +27,17 @@ int main(void) {
     parseFromGrammarFile("left-recursion.txt", &symbols, &ruleBodies);
     printGrammarInfo(symbols, ruleBodies, arrlen(ruleBodies));
 
-    eliminateLeftRecursion(symbols, ruleBodies);
+    {
+        Symbol *modifiedSymbols;
+        int ***modifiedRules;
+        eliminateLeftRecursion(symbols, ruleBodies, &modifiedSymbols, &modifiedRules);
+        
+        puts("\nLeft recursion eliminated");
+        printGrammarInfo(modifiedSymbols, modifiedRules, arrlen(ruleBodies));
+
+        arrfree(modifiedSymbols);
+        freeRuleBodies(modifiedRules);
+    }
 
     arrfree(symbols);
     freeRuleBodies(ruleBodies);
@@ -265,7 +275,7 @@ int ***copyRules(int ***rules) {
 }
 
 
-void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules) {
+void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbol **modifiedSymbols, int ****rulesAfterElimination) {
     Symbol *symbols = copySymbols(originalSymbols);
     int ***rules = copyRules(originalRules);
     int variableIndex;
@@ -331,10 +341,7 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules) {
         }
 
     }
-
-    puts("\nLEFT RECURSION ELIMINATED.........");
-    printGrammarInfo(symbols, rules, arrlen(originalRules));
-
-    arrfree(symbols);
-    freeRuleBodies(rules);
+    
+    *modifiedSymbols = symbols;
+    *rulesAfterElimination = rules;
 }
