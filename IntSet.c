@@ -21,18 +21,25 @@ void putInSet(IntSet *set, int value) {
     hmput(set->hash, value, 1);
 }
 
+void removeFromSet(IntSet *set, int value) {
+    hmput(set->hash, value, 0);
+}
 
 int existsInSet(IntSet *set, int value) {
     return hmget(set->hash, value) != 0;
 }
 
-int *getContents(IntSet *set) {
+int *getContentsOfSet(IntSet *set) {
     int *array = NULL;
     int i;
     for (i = 0; i < hmlen(set->hash); ++i) {
         arrput(array, set->hash[i].key);
     }
     return array;
+}
+
+int getLengthOfSet(IntSet *set) {
+    return hmlen(set->hash);
 }
 
 void destroyIntSet(IntSet *set) {

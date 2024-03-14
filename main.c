@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "Symbol.h"
+#include "IntSet.h"
 
 char **split(char *string, const char *delimeter);
 char *strdup(const char *string);
@@ -19,25 +20,17 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
 void freeRuleBodies(int ***ruleBodies);
 Symbol *copySymbols(Symbol *symbols);
 int ***copyRules(int ***rules);
+void fixNullables(Symbol *symbols, int ***rules);
+void addCombinationOfNullableRemovedRules(int ***result, int *rule, IntSet *nullables);
 
 int main(void) {
     Symbol *symbols;
     int ***ruleBodies;
 
-    parseFromGrammarFile("left-recursion.txt", &symbols, &ruleBodies);
+    parseFromGrammarFile("nullable.txt", &symbols, &ruleBodies);
     printGrammarInfo(symbols, ruleBodies, arrlen(ruleBodies));
 
-    {
-        Symbol *modifiedSymbols;
-        int ***modifiedRules;
-        eliminateLeftRecursion(symbols, ruleBodies, &modifiedSymbols, &modifiedRules);
-        
-        puts("\nLeft recursion eliminated");
-        printGrammarInfo(modifiedSymbols, modifiedRules, arrlen(ruleBodies));
-
-        arrfree(modifiedSymbols);
-        freeRuleBodies(modifiedRules);
-    }
+    fixNullables(symbols, ruleBodies);
 
     arrfree(symbols);
     freeRuleBodies(ruleBodies);
@@ -344,4 +337,98 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
     
     *modifiedSymbols = symbols;
     *rulesAfterElimination = rules;
+}
+
+void fixNullables(Symbol *originalSymbols, int ***originalRules) {
+    Symbol *symbols = copySymbols(originalSymbols);
+    int ***rules = copyRules(originalRules);
+    IntSet *nullables = createIntSet();
+
+    IntSet *nextIterationNullables = createIntSet();
+    putInSet(nextIterationNullables, arrlen(symbols) - 2);
+
+    while (getLengthOfSet(nextIterationNullables)) {
+        IntSet *newlyFoundNullables = createIntSet();
+
+        int variableIndex;
+        for (variableIndex = 1; variableIndex < arrlen(rules); ++variableIndex) {
+            int ruleIndex;
+            for (ruleIndex = arrlen(rules[variableIndex]) - 1; ruleIndex >= 0; --ruleIndex) {
+                if (arrlen(rules[variableIndex][ruleIndex]) == 1) {
+                    int symbolIndex = rules[variableIndex][ruleIndex][0];
+                    if (existsInSet(nextIterationNullables, symbolIndex)) {
+                        putInSet(newlyFoundNullables, variableIndex);
+                        putInSet(nullables, variableIndex);
+                        if (symbolIndex == arrlen(symbols) - 2) {
+                            arrfree(rules[variableIndex][ruleIndex]);
+                            arrdel(rules[variableIndex], ruleIndex);
+                        }
+                    }
+                }
+            }
+        }
+        
+        destroyIntSet(nextIterationNullables);
+        nextIterationNullables = newlyFoundNullables;
+    }
+
+    destroyIntSet(nextIterationNullables);
+
+    {
+        int *nullablesArray = getContentsOfSet(nullables);
+        int i;
+        for (i = 0; i < arrlen(nullablesArray); ++i) {
+            printf("%s\n", symbols[nullablesArray[i]].name);
+        }
+
+        arrfree(nullablesArray);
+    }
+
+    if (existsInSet(nullables, 1)) {
+        int *nullRule = NULL;
+        arrput(nullRule, arrlen(symbols) - 2);
+        arrput(rules[0], nullRule);
+    }
+
+    
+    {
+        int variableIndex;
+        for (variableIndex = 0; variableIndex < arrlen(rules); ++variableIndex) {
+            int ruleIndex;
+            int **modifiedRules = NULL;
+            for (ruleIndex = 0; ruleIndex < arrlen(rules[variableIndex]); ++ruleIndex) {
+                addCombinationOfNullableRemovedRules(&modifiedRules, rules[variableIndex][ruleIndex], nullables);
+            }
+
+            arrfree(rules[variableIndex]);
+            rules[variableIndex] = modifiedRules;
+        }
+    }
+
+    printGrammarInfo(symbols, rules, arrlen(rules));
+
+    destroyIntSet(nullables);
+
+    arrfree(symbols);
+    freeRuleBodies(rules);
+}
+
+
+void addCombinationOfNullableRemovedRules(int ***result, int *rule, IntSet *nullables) {
+    arrput(*result, rule);
+    {
+        int i;
+        for (i = 0; i < arrlen(rule); ++i) {
+            if (existsInSet(nullables, rule[i])) {
+                {
+                    int j;
+                    int *copy = NULL;
+                    for (j = 0; j < arrlen(rule); ++j) {
+                        if (j != i) arrput(copy, rule[j]);
+                    }
+                    if (arrlen(copy)) addCombinationOfNullableRemovedRules(result, copy, nullables);
+                }
+            }
+        }
+    }
 }

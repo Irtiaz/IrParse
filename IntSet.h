@@ -6,8 +6,10 @@ typedef struct IntSetStruct IntSet;
 IntSet *createIntSet(void);
 
 void putInSet(IntSet *set, int value);
+void removeFromSet(IntSet *set, int value);
 int existsInSet(IntSet *set, int value);
-int *getContents(IntSet *set);
+int *getContentsOfSet(IntSet *set);
+int getLengthOfSet(IntSet *set);
 
 void destroyIntSet(IntSet *set);
 
