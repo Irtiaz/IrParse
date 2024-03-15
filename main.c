@@ -20,8 +20,11 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
 void freeRuleBodies(int ***ruleBodies);
 Symbol *copySymbols(Symbol *symbols);
 int ***copyRules(int ***rules);
-void fixNullables(Symbol *symbols, int ***rules);
+IntSet *fixNullables(Symbol *originalSymbols, int ***originalRules, int ****rulesReturn);
 void addCombinationOfNullableRemovedRules(int ***result, int *rule, IntSet *nullables);
+
+void calculateFirstSet(IntSet **result, Symbol *symbols, int ***rules);
+void firstOf(IntSet **result, int symbolIndex, Symbol *symbols, int ***rules);
 
 int main(void) {
     Symbol *symbols;
@@ -30,7 +33,27 @@ int main(void) {
     parseFromGrammarFile("nullable.txt", &symbols, &ruleBodies);
     printGrammarInfo(symbols, ruleBodies, arrlen(ruleBodies));
 
-    fixNullables(symbols, ruleBodies);
+    {
+        int ***modifiedRules;
+        IntSet * nullables = fixNullables(symbols, ruleBodies, &modifiedRules);
+
+        printGrammarInfo(symbols, modifiedRules, arrlen(modifiedRules));
+
+        {
+            {
+                int *nullablesArray = getContentsOfSet(nullables);
+                int i;
+                for (i = 0; i < arrlen(nullablesArray); ++i) {
+                    printf("%s\n", symbols[nullablesArray[i]].name);
+                }
+
+                arrfree(nullablesArray);
+            }
+        }
+
+        destroyIntSet(nullables);
+        freeRuleBodies(modifiedRules);
+    }
 
     arrfree(symbols);
     freeRuleBodies(ruleBodies);
@@ -311,7 +334,7 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
                 strcat(extraSymbol.name, "'");
                 extraSymbol.isTerminal = 0; 
                 arrput(symbols, extraSymbol);
-                
+
                 {
                     int i;
                     for (i = 0; i < arrlen(rules[variableIndex]); ++i) {
@@ -324,7 +347,7 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
                     int *nullRule = NULL;
                     arrput(nullRule, arrlen(originalSymbols) - 2);
                     for (i = 0; i < arrlen(recursiveRules); ++i) {
-                       arrput(recursiveRules[i], arrlen(symbols) - 1);
+                        arrput(recursiveRules[i], arrlen(symbols) - 1);
                     }
                     arrput(recursiveRules, nullRule);
                     arrput(rules, recursiveRules);
@@ -334,12 +357,12 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
         }
 
     }
-    
+
     *modifiedSymbols = symbols;
     *rulesAfterElimination = rules;
 }
 
-void fixNullables(Symbol *originalSymbols, int ***originalRules) {
+IntSet *fixNullables(Symbol *originalSymbols, int ***originalRules, int ****rulesReturn) {
     Symbol *symbols = copySymbols(originalSymbols);
     int ***rules = copyRules(originalRules);
     IntSet *nullables = createIntSet();
@@ -367,22 +390,13 @@ void fixNullables(Symbol *originalSymbols, int ***originalRules) {
                 }
             }
         }
-        
+
         destroyIntSet(nextIterationNullables);
         nextIterationNullables = newlyFoundNullables;
     }
 
     destroyIntSet(nextIterationNullables);
 
-    {
-        int *nullablesArray = getContentsOfSet(nullables);
-        int i;
-        for (i = 0; i < arrlen(nullablesArray); ++i) {
-            printf("%s\n", symbols[nullablesArray[i]].name);
-        }
-
-        arrfree(nullablesArray);
-    }
 
     if (existsInSet(nullables, 1)) {
         int *nullRule = NULL;
@@ -390,7 +404,7 @@ void fixNullables(Symbol *originalSymbols, int ***originalRules) {
         arrput(rules[1], nullRule);
     }
 
-    
+
     {
         int variableIndex;
         for (variableIndex = 0; variableIndex < arrlen(rules); ++variableIndex) {
@@ -405,12 +419,10 @@ void fixNullables(Symbol *originalSymbols, int ***originalRules) {
         }
     }
 
-    printGrammarInfo(symbols, rules, arrlen(rules));
-
-    destroyIntSet(nullables);
-
+    *rulesReturn = rules;
     arrfree(symbols);
-    freeRuleBodies(rules);
+
+    return nullables;
 }
 
 
