@@ -11,66 +11,61 @@
 char **split(char *string, const char *delimeter);
 char *strdup(const char *string);
 int getIndexOfSymbol(Symbol *symbols, const char *symbolName);
-void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****ruleBodiesArray);
+void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****rulesArray);
 int *concat(int *arr1, int *arr2);
 int *flattenWithSingleRule(int *previousRule, int *laterRule);
 void flattenWithMultipleRules(int ***result, int **previousRules, int *laterRule);
-void printGrammarInfo(Symbol *symbols, int ***ruleBodies, int ruleBreakPoint);
+void printGrammarInfo(Symbol *symbols, int ***rules, int ruleBreakPoint);
 void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbol **modifiedSymbols, int ****rulesAfterElimination);
-void freeRuleBodies(int ***ruleBodies);
+void freeRules(int ***rules);
 Symbol *copySymbols(Symbol *symbols);
 int ***copyRules(int ***rules);
 IntSet *fixNullables(Symbol *originalSymbols, int ***originalRules, int ****rulesReturn);
 void addCombinationOfNullableRemovedRules(int ***result, int *rule, IntSet *nullables);
-
-void calculateFirstSet(IntSet **result, Symbol *symbols, int ***rules);
-void firstOf(IntSet **result, int symbolIndex, Symbol *symbols, int ***rules);
+IntSet *firstOf(IntSet **result, int symbolIndex, Symbol *symbols, int ***rules);
+IntSet **getFirstSetArray(Symbol *symbols, int ***rules);
 
 int main(void) {
     Symbol *symbols;
-    int ***ruleBodies;
+    int ***rules;
 
-    parseFromGrammarFile("nullable.txt", &symbols, &ruleBodies);
-    printGrammarInfo(symbols, ruleBodies, arrlen(ruleBodies));
+    parseFromGrammarFile("first-check.txt", &symbols, &rules);
+    printGrammarInfo(symbols, rules, arrlen(rules));
 
     {
-        int ***modifiedRules;
-        IntSet * nullables = fixNullables(symbols, ruleBodies, &modifiedRules);
-
-        printGrammarInfo(symbols, modifiedRules, arrlen(modifiedRules));
-
-        {
-            {
-                int *nullablesArray = getContentsOfSet(nullables);
-                int i;
-                for (i = 0; i < arrlen(nullablesArray); ++i) {
-                    printf("%s\n", symbols[nullablesArray[i]].name);
-                }
-
-                arrfree(nullablesArray);
+        IntSet **firstSetArray = getFirstSetArray(symbols, rules);
+        int i;
+        for (i = 0; i < arrlen(symbols); ++i) {
+            int *contentsOfFirstSet = getContentsOfSet(firstSetArray[i]);
+            int j;
+            printf("First(%s) = ", symbols[i].name);
+            for (j = 0; j < arrlen(contentsOfFirstSet); ++j) {
+                printf("%s ", symbols[contentsOfFirstSet[j]].name);
             }
+            printf("\n");
+            arrfree(contentsOfFirstSet); 
         }
 
-        destroyIntSet(nullables);
-        freeRuleBodies(modifiedRules);
+        for (i = 0; i < arrlen(firstSetArray); ++i) destroyIntSet(firstSetArray[i]);
+        arrfree(firstSetArray);
     }
 
     arrfree(symbols);
-    freeRuleBodies(ruleBodies);
+    freeRules(rules);
 
     return 0;
 }
 
-void freeRuleBodies(int ***ruleBodies) {
+void freeRules(int ***rules) {
     int i;
-    for (i = 0; i < arrlen(ruleBodies); ++i) {
+    for (i = 0; i < arrlen(rules); ++i) {
         int j;
-        for (j = 0; j < arrlen(ruleBodies[i]); ++j) {
-            arrfree(ruleBodies[i][j]);
+        for (j = 0; j < arrlen(rules[i]); ++j) {
+            arrfree(rules[i][j]);
         }
-        arrfree(ruleBodies[i]);
+        arrfree(rules[i]);
     }
-    arrfree(ruleBodies);
+    arrfree(rules);
 }
 
 
@@ -105,9 +100,9 @@ int getIndexOfSymbol(Symbol *symbols, const char *symbolName) {
     return -1;
 }
 
-void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****ruleBodiesArray) {
+void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****rulesArray) {
     Symbol *symbols = NULL;
-    int ***ruleBodies = NULL;
+    int ***rules = NULL;
 
     {
         Symbol dummyStart = {"_S", 0};
@@ -125,7 +120,7 @@ void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, in
             exit(1);
         }
 
-        fscanf(grammarFile, "%[^(\r)?\n]s", line);
+        fscanf(grammarFile, "%[^\r\n]s", line);
         fgetc(grammarFile);
         {
             char **array = split(line, " ");
@@ -143,7 +138,7 @@ void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, in
         }
 
 
-        fscanf(grammarFile, "%[^(\r)?\n]s", line);
+        fscanf(grammarFile, "%[^\r\n]s", line);
         fgetc(grammarFile);
         {
             char **array = split(line, " ");
@@ -171,17 +166,17 @@ void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, in
         {
             int i;
             for (i = 0; i < arrlen(symbols) && !symbols[i].isTerminal; ++i) {
-                arrput(ruleBodies, NULL);
+                arrput(rules, NULL);
             }
         }
 
         {
             int *dummyStartToActualStartRuleDerivation = NULL;
             arrput(dummyStartToActualStartRuleDerivation, 1);
-            arrput(ruleBodies[0], dummyStartToActualStartRuleDerivation);
+            arrput(rules[0], dummyStartToActualStartRuleDerivation);
         }
 
-        while (fscanf(grammarFile, "%[^(\r)?\n]s", line) != EOF) {
+        while (fscanf(grammarFile, "%[^\r\n]s", line) != EOF) {
             char **array = split(line, " ");
             int *ruleDerivationArray = NULL;
             int i;
@@ -194,7 +189,7 @@ void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, in
                 free(array[i]);
             }
 
-            arrput(ruleBodies[variableIndex], ruleDerivationArray);
+            arrput(rules[variableIndex], ruleDerivationArray);
 
             arrfree(array);
             fgetc(grammarFile);
@@ -204,7 +199,7 @@ void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, in
     }
 
     *symbolsArray = symbols;
-    *ruleBodiesArray = ruleBodies;
+    *rulesArray = rules;
 }
 
 int *concat(int *arr1, int *arr2) {
@@ -233,7 +228,7 @@ void flattenWithMultipleRules(int ***result, int **previousRules, int *laterRule
     }
 }
 
-void printGrammarInfo(Symbol *symbols, int ***ruleBodies, int ruleBreakPoint) {
+void printGrammarInfo(Symbol *symbols, int ***rules, int ruleBreakPoint) {
     int eofSymbolIndex = getIndexOfSymbol(symbols, "$");
 
     {
@@ -245,8 +240,8 @@ void printGrammarInfo(Symbol *symbols, int ***ruleBodies, int ruleBreakPoint) {
 
     {
         int i;
-        for (i = 0; i < arrlen(ruleBodies); ++i) {
-            int **bodies = ruleBodies[i];
+        for (i = 0; i < arrlen(rules); ++i) {
+            int **bodies = rules[i];
             {
                 int k;
                 printf("%s -> ", symbols[i < ruleBreakPoint? i : eofSymbolIndex + 1 + i - ruleBreakPoint].name);
@@ -443,4 +438,82 @@ void addCombinationOfNullableRemovedRules(int ***result, int *rule, IntSet *null
             }
         }
     }
+}
+
+IntSet *firstOf(IntSet **result, int symbolIndex, Symbol *symbols, int ***rules) {
+    if (getLengthOfSet(result[symbolIndex])) return result[symbolIndex];
+    else {
+        if (symbols[symbolIndex].isTerminal) {
+            putInSet(result[symbolIndex], symbolIndex);
+        }
+        else {
+            int ruleIndex;
+            for (ruleIndex = 0; ruleIndex < arrlen(rules[symbolIndex]); ++ruleIndex) {
+                int *rule = rules[symbolIndex][ruleIndex];
+                int askNextVariable = 1;
+                int nextVariable = 0;
+                int emptySymbol = getIndexOfSymbol(symbols, "#");
+                while (askNextVariable && nextVariable < arrlen(rule)) {
+                    IntSet *firstOfNextVariable = firstOf(result, rule[nextVariable], symbols, rules);
+                    int *firstArray = getContentsOfSet(firstOfNextVariable);
+                    askNextVariable = 0;
+                    {
+                        int i;
+                        for (i = 0; i < arrlen(firstArray); ++i) {
+                            if (firstArray[i] != emptySymbol) putInSet(result[symbolIndex], firstArray[i]);
+                            else askNextVariable = 1;
+                        }
+                    }
+                    arrfree(firstArray);
+                    if (askNextVariable) ++nextVariable;
+                }
+                if (nextVariable >= arrlen(rule)) putInSet(result[symbolIndex], emptySymbol);
+            }
+        }
+        return result[symbolIndex];
+    }
+}
+
+IntSet **getFirstSetArray(Symbol *symbols, int ***rules) {
+   IntSet **result = NULL; 
+
+   int ***nullableRemovedRules;
+   Symbol *leftRecursionEliminatedSymbols;
+   int ***leftRecursionEliminatedRules;
+
+   IntSet *nullables = fixNullables(symbols, rules, &nullableRemovedRules);
+
+   eliminateLeftRecursion(symbols, nullableRemovedRules, &leftRecursionEliminatedSymbols, &leftRecursionEliminatedRules);
+
+   {
+       int i;
+       for (i = 0; i < arrlen(symbols); ++i) arrput(result, createIntSet());
+   }
+
+   {
+       int i;
+       for (i = 0; i < arrlen(symbols); ++i) {
+           (void)firstOf(result, i, leftRecursionEliminatedSymbols, leftRecursionEliminatedRules);
+       }
+   }
+
+
+   {
+       int emptySymbol = getIndexOfSymbol(symbols, "#");
+       int *nullablesArray = getContentsOfSet(nullables);
+       int i;
+       for (i = 0; i < arrlen(nullablesArray); ++i) {
+           putInSet(result[nullablesArray[i]], emptySymbol);
+       }
+
+       arrfree(nullablesArray);
+   }
+
+
+   destroyIntSet(nullables);
+   arrfree(leftRecursionEliminatedSymbols);
+   freeRules(leftRecursionEliminatedRules);
+   freeRules(nullableRemovedRules);
+
+   return result;
 }
