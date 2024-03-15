@@ -359,7 +359,7 @@ void fixNullables(Symbol *originalSymbols, int ***originalRules) {
                     if (existsInSet(nextIterationNullables, symbolIndex)) {
                         putInSet(newlyFoundNullables, variableIndex);
                         putInSet(nullables, variableIndex);
-                        if (symbolIndex == arrlen(symbols) - 2) {
+                        if (symbolIndex == arrlen(symbols) - 2 && variableIndex != 1) {
                             arrfree(rules[variableIndex][ruleIndex]);
                             arrdel(rules[variableIndex], ruleIndex);
                         }
@@ -374,6 +374,9 @@ void fixNullables(Symbol *originalSymbols, int ***originalRules) {
 
     destroyIntSet(nextIterationNullables);
 
+    puts("Intermediate");
+    printGrammarInfo(symbols, rules, arrlen(rules));
+
     {
         int *nullablesArray = getContentsOfSet(nullables);
         int i;
@@ -387,7 +390,7 @@ void fixNullables(Symbol *originalSymbols, int ***originalRules) {
     if (existsInSet(nullables, 1)) {
         int *nullRule = NULL;
         arrput(nullRule, arrlen(symbols) - 2);
-        arrput(rules[1], nullRule);
+        arrput(rules[0], nullRule);
     }
 
     
