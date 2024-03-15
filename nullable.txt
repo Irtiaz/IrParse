@@ -1,9 +1,0 @@
-S A B P
-a
-S A
-S a A B
-A A B a
-A #
-B A A
-B P
-P A
