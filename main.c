@@ -32,6 +32,8 @@ ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, Int
 IntSet *getFollowOfSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray);
 ItemElement **getSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray);
 void printItem(ItemElement **item, Symbol *symbols, int ***rules);
+void destroyItem(ItemElement **item);
+int itemsAreEssentiallySame(ItemElement **item1, ItemElement **item2);
 
 int main(void) {
     Symbol *symbols;
@@ -64,12 +66,8 @@ int main(void) {
             destroyIntSet(followSetForRoot);
             {
                 ItemElement **result = getClosureOf(element, symbols, rules, firstSetArray);
-                int resultIndex;
                 printItem(result, symbols, rules);
-                for (resultIndex = 0; resultIndex < arrlen(result); ++resultIndex) {
-                    destroyItemElement(result[resultIndex]);
-                }
-                arrfree(result);
+                destroyItem(result);
             }
         }
 
@@ -652,5 +650,28 @@ void printItem(ItemElement **item, Symbol *symbols, int ***rules) {
     int i;
     for (i = 0; i < arrlen(item); ++i) {
         printItemElement(item[i], symbols, rules);
+    }
+}
+
+void destroyItem(ItemElement **item) {
+    int i;
+    for (i = 0; i < arrlen(item); ++i) destroyItemElement(item[i]);
+    arrfree(item);
+}
+
+int itemsAreEssentiallySame(ItemElement **item1, ItemElement **item2) {
+    if (arrlen(item1) != arrlen(item2)) return 0;
+    else {
+        int i;
+        for (i = 0; i < arrlen(item1); ++i) {
+            ItemElement *element1 = item1[i];
+            int j;
+            for (j = 0; j < arrlen(item2); ++j) {
+                ItemElement *element2 = item2[j];
+                if (elementsHaveSameBody(element1, element2)) break;
+            }
+            if (j >= arrlen(item2)) return 0;
+        }
+        return 1;
     }
 }

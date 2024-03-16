@@ -18,6 +18,12 @@ ItemElement *createItemElement(int variableIndex, int ruleIndex, int dotIndex, I
     return itemElement;
 }
 
+ItemElement *getNextElement(ItemElement *element, int ***rules) {
+    int *rule = rules[element->variableIndex][element->ruleIndex];
+    if (element->dotIndex == arrlen(rule) - 1) return NULL;
+    else return createItemElement(element->variableIndex, element->ruleIndex, element->dotIndex + 1, element->allowedFollowSet);
+}
+
 int elementsAreSame(ItemElement *element1, ItemElement *element2) {
     if (element1->variableIndex != element2->variableIndex || element1->ruleIndex != element2->ruleIndex || element1->dotIndex != element2->dotIndex) return 0;
     else {
@@ -39,6 +45,10 @@ int elementsAreSame(ItemElement *element1, ItemElement *element2) {
         arrfree(followSet2);
         return result;
     }
+}
+
+int elementsHaveSameBody(ItemElement *element1, ItemElement *element2) {
+    return element1->variableIndex == element2->variableIndex && element1->ruleIndex == element2->ruleIndex && element1->dotIndex == element2->dotIndex;
 }
 
 void printItemElement(ItemElement *element, Symbol *symbols, int ***rules) {
