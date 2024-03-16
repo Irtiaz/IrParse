@@ -7,6 +7,7 @@
 
 #include "Symbol.h"
 #include "IntSet.h"
+#include "ItemElement.h"
 
 char **split(char *string, const char *delimeter);
 char *strdup(const char *string);
@@ -26,12 +27,17 @@ void addCombinationOfNullableRemovedRules(int ***result, int *rule, IntSet *null
 IntSet *firstOf(IntSet **result, int symbolIndex, Symbol *symbols, int ***rules);
 IntSet **getFirstSetArray(Symbol *symbols, int ***rules);
 IntSet *getFirstOfSubRule(Symbol *symbols, int *rule, int startIndex, IntSet **firstSetArray);
+int itemElementExistsInItem(ItemElement *element, ItemElement **item);
+ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray);
+IntSet *getFollowOfSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray);
+ItemElement **getSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray);
+void printItem(ItemElement **item, Symbol *symbols, int ***rules);
 
 int main(void) {
     Symbol *symbols;
     int ***rules;
 
-    parseFromGrammarFile("subrule-first-check.txt", &symbols, &rules);
+    parseFromGrammarFile("grammar.txt", &symbols, &rules);
     printGrammarInfo(symbols, rules, arrlen(rules));
 
     {
@@ -51,15 +57,20 @@ int main(void) {
         }
 
         {
-            IntSet *subRuleFirst = getFirstOfSubRule(symbols, rules[2][0], 1, firstSetArray);
-            int *contentsOfSubRuleFirst = getContentsOfSet(subRuleFirst);
-            int i;
-            for (i = 0; i < arrlen(contentsOfSubRuleFirst); ++i) {
-                printf("%s ", symbols[contentsOfSubRuleFirst[i]].name);
+            IntSet *followSetForRoot = createIntSet();
+            ItemElement *element;
+            putInSet(followSetForRoot, arrlen(symbols) - 1);
+            element = createItemElement(0, 0, 0, followSetForRoot);
+            destroyIntSet(followSetForRoot);
+            {
+                ItemElement **result = getClosureOf(element, symbols, rules, firstSetArray);
+                int resultIndex;
+                printItem(result, symbols, rules);
+                for (resultIndex = 0; resultIndex < arrlen(result); ++resultIndex) {
+                    destroyItemElement(result[resultIndex]);
+                }
+                arrfree(result);
             }
-            printf("\n");
-            arrfree(contentsOfSubRuleFirst);
-            destroyIntSet(subRuleFirst);
         }
 
         {
@@ -565,4 +576,81 @@ IntSet *getFirstOfSubRule(Symbol *symbols, int *rule, int startIndex, IntSet **f
     
     if (nextVariable >= arrlen(rule)) putInSet(result, arrlen(symbols) - 2);
     return result;
+}
+
+int itemElementExistsInItem(ItemElement *element, ItemElement **item) {
+    int i;
+    for (i = 0; i < arrlen(item); ++i) {
+        if (elementsAreSame(item[i], element)) return 1;
+    }
+    return 0;
+}
+
+IntSet *getFollowOfSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
+    int *rule = rules[root->variableIndex][root->ruleIndex];
+    return root->dotIndex < arrlen(rule) - 1? getFirstOfSubRule(symbols, rule, root->dotIndex + 1, firstSetArray) : createCopyOfIntSet(root->allowedFollowSet);
+}
+
+ItemElement **getSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
+    int symbolIndexUnderDot = rules[root->variableIndex][root->ruleIndex][root->dotIndex];
+    Symbol symbolUnderDot = symbols[symbolIndexUnderDot];
+    if (symbolUnderDot.isTerminal) return NULL;
+    else {
+        ItemElement **result = NULL; 
+        IntSet *follow = getFollowOfSingleRunClosure(root, symbols, rules, firstSetArray);
+        
+        int ruleIndex;
+        for (ruleIndex = 0; ruleIndex < arrlen(rules[symbolIndexUnderDot]); ++ruleIndex) {
+            ItemElement *closureElement = createItemElement(symbolIndexUnderDot, ruleIndex, 0, follow);
+            arrput(result, closureElement);
+        }
+
+        destroyIntSet(follow);
+        return result;
+    }
+}
+
+ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
+   ItemElement **item = NULL; 
+   arrput(item, root);
+
+   {
+       int found = 1;
+       while (found) {
+           int currentLength = arrlen(item);
+           found = 0;
+           {
+               int elementIndex;
+               for (elementIndex = 0; elementIndex < currentLength; ++elementIndex) {
+                   ItemElement *element = item[elementIndex];
+                   ItemElement **singleRunClosure = getSingleRunClosure(element, symbols, rules, firstSetArray);
+                   int closureIndex;
+                   for (closureIndex = 0; closureIndex < arrlen(singleRunClosure); ++closureIndex) {
+                       ItemElement *closure = singleRunClosure[closureIndex];
+                       int checkIndex;
+                       for (checkIndex = 0; checkIndex < arrlen(item); ++checkIndex) {
+                           if (elementsAreSame(item[checkIndex], closure)) {
+                               break;
+                           }
+                       }
+                       if (checkIndex >= arrlen(item)) {
+                           found = 1;
+                           arrput(item, closure);
+                       }
+                       else destroyItemElement(closure);
+                   }
+                   arrfree(singleRunClosure);
+               }
+           }
+       }
+   }
+
+   return item;
+}
+
+void printItem(ItemElement **item, Symbol *symbols, int ***rules) {
+    int i;
+    for (i = 0; i < arrlen(item); ++i) {
+        printItemElement(item[i], symbols, rules);
+    }
 }

@@ -5,6 +5,7 @@ typedef struct IntSetStruct IntSet;
 
 IntSet *createIntSet(void);
 
+IntSet *createCopyOfIntSet(IntSet *source);
 void putInSet(IntSet *set, int value);
 void removeFromSet(IntSet *set, int value);
 int existsInSet(IntSet *set, int value);

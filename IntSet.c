@@ -17,6 +17,17 @@ IntSet *createIntSet(void) {
     return set;
 }
 
+IntSet *createCopyOfIntSet(IntSet *source) {
+    int *items = getContentsOfSet(source);
+    IntSet *result = createIntSet();
+    int i;
+    for (i = 0; i < arrlen(items); ++i) {
+        putInSet(result, items[i]);
+    }
+    arrfree(items);
+    return result;
+}
+
 void putInSet(IntSet *set, int value) {
     hmput(set->hash, value, 1);
 }
