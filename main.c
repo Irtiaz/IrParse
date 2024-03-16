@@ -20,35 +20,55 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
 void freeRules(int ***rules);
 Symbol *copySymbols(Symbol *symbols);
 int ***copyRules(int ***rules);
+int isNullRule(IntSet *nullables, int *rule);
 IntSet *fixNullables(Symbol *originalSymbols, int ***originalRules, int ****rulesReturn);
 void addCombinationOfNullableRemovedRules(int ***result, int *rule, IntSet *nullables);
 IntSet *firstOf(IntSet **result, int symbolIndex, Symbol *symbols, int ***rules);
 IntSet **getFirstSetArray(Symbol *symbols, int ***rules);
+IntSet *getFirstOfSubRule(Symbol *symbols, int *rule, int startIndex, IntSet **firstSetArray);
 
 int main(void) {
     Symbol *symbols;
     int ***rules;
 
-    parseFromGrammarFile("first-check.txt", &symbols, &rules);
+    parseFromGrammarFile("subrule-first-check.txt", &symbols, &rules);
     printGrammarInfo(symbols, rules, arrlen(rules));
 
     {
         IntSet **firstSetArray = getFirstSetArray(symbols, rules);
-        int i;
-        for (i = 0; i < arrlen(symbols); ++i) {
-            int *contentsOfFirstSet = getContentsOfSet(firstSetArray[i]);
-            int j;
-            printf("First(%s) = ", symbols[i].name);
-            for (j = 0; j < arrlen(contentsOfFirstSet); ++j) {
-                printf("%s ", symbols[contentsOfFirstSet[j]].name);
+        {
+            int i;
+            for (i = 0; i < arrlen(symbols); ++i) {
+                int *contentsOfFirstSet = getContentsOfSet(firstSetArray[i]);
+                int j;
+                printf("First(%s) = ", symbols[i].name);
+                for (j = 0; j < arrlen(contentsOfFirstSet); ++j) {
+                    printf("%s ", symbols[contentsOfFirstSet[j]].name);
+                }
+                printf("\n");
+                arrfree(contentsOfFirstSet); 
             }
-            printf("\n");
-            arrfree(contentsOfFirstSet); 
         }
 
-        for (i = 0; i < arrlen(firstSetArray); ++i) destroyIntSet(firstSetArray[i]);
+        {
+            IntSet *subRuleFirst = getFirstOfSubRule(symbols, rules[2][0], 1, firstSetArray);
+            int *contentsOfSubRuleFirst = getContentsOfSet(subRuleFirst);
+            int i;
+            for (i = 0; i < arrlen(contentsOfSubRuleFirst); ++i) {
+                printf("%s ", symbols[contentsOfSubRuleFirst[i]].name);
+            }
+            printf("\n");
+            arrfree(contentsOfSubRuleFirst);
+            destroyIntSet(subRuleFirst);
+        }
+
+        {
+            int i;
+            for (i = 0; i < arrlen(firstSetArray); ++i) destroyIntSet(firstSetArray[i]);
+        }
         arrfree(firstSetArray);
     }
+
 
     arrfree(symbols);
     freeRules(rules);
@@ -357,6 +377,14 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
     *rulesAfterElimination = rules;
 }
 
+int isNullRule(IntSet *nullables, int *rule) {
+    int i;
+    for (i = 0; i < arrlen(rule); ++i) {
+        if (!existsInSet(nullables, rule[i])) return 0;
+    }
+    return 1;
+}
+
 IntSet *fixNullables(Symbol *originalSymbols, int ***originalRules, int ****rulesReturn) {
     Symbol *symbols = copySymbols(originalSymbols);
     int ***rules = copyRules(originalRules);
@@ -372,15 +400,12 @@ IntSet *fixNullables(Symbol *originalSymbols, int ***originalRules, int ****rule
         for (variableIndex = 1; variableIndex < arrlen(rules); ++variableIndex) {
             int ruleIndex;
             for (ruleIndex = arrlen(rules[variableIndex]) - 1; ruleIndex >= 0; --ruleIndex) {
-                if (arrlen(rules[variableIndex][ruleIndex]) == 1) {
-                    int symbolIndex = rules[variableIndex][ruleIndex][0];
-                    if (existsInSet(nextIterationNullables, symbolIndex)) {
-                        putInSet(newlyFoundNullables, variableIndex);
-                        putInSet(nullables, variableIndex);
-                        if (symbolIndex == arrlen(symbols) - 2) {
-                            arrfree(rules[variableIndex][ruleIndex]);
-                            arrdel(rules[variableIndex], ruleIndex);
-                        }
+                if (isNullRule(nullables, rules[variableIndex][ruleIndex]) || isNullRule(nullables, rules[variableIndex][ruleIndex])) {
+                    putInSet(newlyFoundNullables, variableIndex);
+                    putInSet(nullables, variableIndex);
+                    if (arrlen(rules[variableIndex][ruleIndex]) == 1 && rules[variableIndex][ruleIndex][0] == arrlen(symbols) - 2) {
+                        arrfree(rules[variableIndex][ruleIndex]);
+                        arrdel(rules[variableIndex], ruleIndex);
                     }
                 }
             }
@@ -516,4 +541,28 @@ IntSet **getFirstSetArray(Symbol *symbols, int ***rules) {
    freeRules(nullableRemovedRules);
 
    return result;
+}
+
+
+IntSet *getFirstOfSubRule(Symbol *symbols, int *rule, int startIndex, IntSet **firstSetArray) {
+    IntSet *result = createIntSet();
+    int askNextVariable = 1;
+    int nextVariable = startIndex;
+    while (askNextVariable && nextVariable < arrlen(rule)) {
+        IntSet *firstOfNextVariable = firstSetArray[rule[nextVariable]];
+        int *contents = getContentsOfSet(firstOfNextVariable);
+        int i;
+        askNextVariable = 0;
+        for (i = 0; i < arrlen(contents); ++i) {
+            if (contents[i] != arrlen(symbols) - 2) putInSet(result, contents[i]);
+            else {
+                askNextVariable = 1;
+                ++nextVariable;
+            }
+        }
+        arrfree(contents);
+    }
+    
+    if (nextVariable >= arrlen(rule)) putInSet(result, arrlen(symbols) - 2);
+    return result;
 }
