@@ -51,7 +51,7 @@ int main(void) {
     ItemElement ***items = NULL;
     int **gotos = NULL;
 
-    parseFromGrammarFile("grammar.txt", &symbols, &rules);
+    parseFromGrammarFile("expression-grammar.txt", &symbols, &rules);
     printGrammarInfo(symbols, rules, arrlen(rules));
 
     firstSetArray = getFirstSetArray(symbols, rules);
@@ -633,20 +633,28 @@ ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, Int
                     for (closureIndex = 0; closureIndex < arrlen(singleRunClosure); ++closureIndex) {
                         ItemElement *closure = singleRunClosure[closureIndex];
                         int checkIndex;
-                        for (checkIndex = 0; checkIndex < arrlen(item); ++checkIndex) {
+                        for (checkIndex = 0; checkIndex < currentLength; ++checkIndex) {
                             if (elementsAreSame(item[checkIndex], closure)) {
                                 break;
                             }
                         }
-                        if (checkIndex >= arrlen(item)) {
+                        if (checkIndex >= currentLength) {
+                            
                             int bodyMatch = itemElementMatchesIn(item, closure);
-                            if (bodyMatch < 0) arrput(item, closure);
-                            else {
+                            if (bodyMatch < 0) {
+                                arrput(item, closure);
+                                found = 1;
+                            }
+                            else if (!isSuperSet(item[bodyMatch]->allowedFollowSet, closure->allowedFollowSet)) {
                                 mergeItemElementFollows(item[bodyMatch], closure);
                                 destroyItemElement(closure);
                                 closure = NULL;
+                                found = 1;
                             }
-                            found = 1;
+                            else {
+                                destroyItemElement(closure);
+                                closure = NULL;
+                            }
                         }
                         else {
                             destroyItemElement(closure);

@@ -53,6 +53,17 @@ int getLengthOfSet(IntSet *set) {
     return hmlen(set->hash);
 }
 
+int isSuperSet(IntSet *possibleSuperSet, IntSet *otherSet) {
+    int *contents = getContentsOfSet(otherSet);
+    int i;
+    for (i = 0; i < arrlen(contents); ++i) {
+        if (!existsInSet(possibleSuperSet, contents[i])) break;    
+    }
+    arrfree(contents);
+
+    return i >= getLengthOfSet(otherSet);
+}
+
 void destroyIntSet(IntSet *set) {
     hmfree(set->hash);
     free(set);

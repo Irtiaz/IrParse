@@ -11,6 +11,7 @@ void removeFromSet(IntSet *set, int value);
 int existsInSet(IntSet *set, int value);
 int *getContentsOfSet(IntSet *set);
 int getLengthOfSet(IntSet *set);
+int isSuperSet(IntSet *possibleSuperSet, IntSet *otherSet);
 
 void destroyIntSet(IntSet *set);
 
