@@ -56,20 +56,6 @@ int main(void) {
 
     firstSetArray = getFirstSetArray(symbols, rules);
     {
-        int i;
-        for (i = 0; i < arrlen(symbols); ++i) {
-            int *contentsOfFirstSet = getContentsOfSet(firstSetArray[i]);
-            int j;
-            printf("First(%s) = ", symbols[i].name);
-            for (j = 0; j < arrlen(contentsOfFirstSet); ++j) {
-                printf("%s ", symbols[contentsOfFirstSet[j]].name);
-            }
-            printf("\n");
-            arrfree(contentsOfFirstSet); 
-        }
-    }
-
-    {
         int traverseIndex = 0;
 
         IntSet *followSetForRoot = createIntSet();
@@ -77,10 +63,10 @@ int main(void) {
         putInSet(followSetForRoot, arrlen(symbols) - 1);
         element = createItemElement(0, 0, 0, followSetForRoot);
         destroyIntSet(followSetForRoot);
-        
+
         arrput(items, getClosureOf(element, symbols, rules, firstSetArray));
 
-        traverseItemAndResolveGotos(&items, &gotos, &traverseIndex, symbols, rules, firstSetArray);
+        while (traverseIndex < arrlen(items)) traverseItemAndResolveGotos(&items, &gotos, &traverseIndex, symbols, rules, firstSetArray);
 
         printItems(items, symbols, rules);
         printGotos(gotos, symbols);
@@ -631,6 +617,8 @@ ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, Int
     ItemElement **item = NULL; 
     arrput(item, root);
 
+    if (root->dotIndex >= arrlen(rules[root->variableIndex][root->ruleIndex])) return item;
+
     {
         int found = 1;
         while (found) {
@@ -656,10 +644,14 @@ ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, Int
                             else {
                                 mergeItemElementFollows(item[bodyMatch], closure);
                                 destroyItemElement(closure);
+                                closure = NULL;
                             }
                             found = 1;
                         }
-                        else destroyItemElement(closure);
+                        else {
+                            destroyItemElement(closure);
+                            closure = NULL;
+                        }
                     }
                     arrfree(singleRunClosure);
                 }
@@ -679,7 +671,10 @@ void printItem(ItemElement **item, Symbol *symbols, int ***rules) {
 
 void destroyItem(ItemElement **item) {
     int i;
-    for (i = 0; i < arrlen(item); ++i) destroyItemElement(item[i]);
+    for (i = 0; i < arrlen(item); ++i) {
+        destroyItemElement(item[i]);
+        item[i] = NULL;
+    }
     arrfree(item);
 }
 
@@ -725,7 +720,7 @@ int getMatchingItem(ItemElement ***items, ItemElement **item) {
 }
 
 void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddress, int *traverseIndexAddress, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
-    ItemElement **item = *itemsAddress[*traverseIndexAddress];
+    ItemElement **item = (*itemsAddress)[*traverseIndexAddress];
     int *gotoArray = NULL; 
 
     {
@@ -746,7 +741,7 @@ void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddre
                 ItemElement **closureItem = getClosureOf(nextElement, symbols, rules, firstSetArray);
                 int previousMatchIndex = getMatchingItem(*itemsAddress, closureItem);
                 if (previousMatchIndex >= 0) {
-                    mergeItem(*itemsAddress[previousMatchIndex], closureItem);
+                    mergeItem((*itemsAddress)[previousMatchIndex], closureItem);
                     destroyItem(closureItem);
 
                     gotoArray[symbolThatGotTraversed] = previousMatchIndex;
@@ -766,8 +761,9 @@ void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddre
 void printItems(ItemElement ***items, Symbol *symbols, int ***rules) {
     int i;
     for (i = 0; i < arrlen(items); ++i) {
-        printf("______________________\nI%d\n______________________\n", i);
+        printf("\n\n______________________\nI%d\n______________________\n", i);
         printItem(items[i], symbols, rules);
+        printf("______________________\n\n");
     }
 }
 
@@ -785,11 +781,12 @@ void freeGotos(int **gotos) {
 
 void printGotos(int **gotos, Symbol *symbols) {
     int i;
+    puts("GOTOS\n___________");
     for (i = 0; i < arrlen(gotos); ++i) {
         int j;
+        printf("\n");
         for (j = 0; j < arrlen(gotos[i]); ++j) {
             if (gotos[i][j] >= 0) printf("I%d ----%s---> I%d\n", i, symbols[j].name, gotos[i][j]);
         }
-        printf("\n");
     }
 }
