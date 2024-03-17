@@ -12,10 +12,13 @@ typedef struct {
 } ItemElement;
 
 ItemElement *createItemElement(int variableIndex, int ruleIndex, int dotIndex, IntSet *allowedFollowSet);
+
 ItemElement *getNextElement(ItemElement *element, int ***rules);
 int elementsAreSame(ItemElement *element1, ItemElement *element2);
 int elementsHaveSameBody(ItemElement *element1, ItemElement *element2);
 void printItemElement(ItemElement *element, Symbol *symbols, int ***rules);
+void mergeItemElementFollows(ItemElement *destination, ItemElement *source);
+
 void destroyItemElement(ItemElement *itemElement);
 
 #endif

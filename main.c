@@ -34,51 +34,67 @@ ItemElement **getSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rul
 void printItem(ItemElement **item, Symbol *symbols, int ***rules);
 void destroyItem(ItemElement **item);
 int itemsAreEssentiallySame(ItemElement **item1, ItemElement **item2);
+int itemElementMatchesIn(ItemElement **item, ItemElement *itemElement);
+void mergeItem(ItemElement **destination, ItemElement **source);
+int getMatchingItem(ItemElement ***items, ItemElement **item);
+void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddress, int *traverseIndexAddress, Symbol *symbols, int ***rules, IntSet **firstSetArray);
+void printItems(ItemElement ***items, Symbol *symbols, int ***rules);
+void destroyItems(ItemElement ***items);
+void freeGotos(int **gotos);
+void printGotos(int **gotos, Symbol *symbols);
 
 int main(void) {
     Symbol *symbols;
     int ***rules;
+    IntSet **firstSetArray;
+
+    ItemElement ***items = NULL;
+    int **gotos = NULL;
 
     parseFromGrammarFile("grammar.txt", &symbols, &rules);
     printGrammarInfo(symbols, rules, arrlen(rules));
 
+    firstSetArray = getFirstSetArray(symbols, rules);
     {
-        IntSet **firstSetArray = getFirstSetArray(symbols, rules);
-        {
-            int i;
-            for (i = 0; i < arrlen(symbols); ++i) {
-                int *contentsOfFirstSet = getContentsOfSet(firstSetArray[i]);
-                int j;
-                printf("First(%s) = ", symbols[i].name);
-                for (j = 0; j < arrlen(contentsOfFirstSet); ++j) {
-                    printf("%s ", symbols[contentsOfFirstSet[j]].name);
-                }
-                printf("\n");
-                arrfree(contentsOfFirstSet); 
+        int i;
+        for (i = 0; i < arrlen(symbols); ++i) {
+            int *contentsOfFirstSet = getContentsOfSet(firstSetArray[i]);
+            int j;
+            printf("First(%s) = ", symbols[i].name);
+            for (j = 0; j < arrlen(contentsOfFirstSet); ++j) {
+                printf("%s ", symbols[contentsOfFirstSet[j]].name);
             }
+            printf("\n");
+            arrfree(contentsOfFirstSet); 
         }
+    }
 
-        {
-            IntSet *followSetForRoot = createIntSet();
-            ItemElement *element;
-            putInSet(followSetForRoot, arrlen(symbols) - 1);
-            element = createItemElement(0, 0, 0, followSetForRoot);
-            destroyIntSet(followSetForRoot);
-            {
-                ItemElement **result = getClosureOf(element, symbols, rules, firstSetArray);
-                printItem(result, symbols, rules);
-                destroyItem(result);
-            }
-        }
+    {
+        int traverseIndex = 0;
 
-        {
-            int i;
-            for (i = 0; i < arrlen(firstSetArray); ++i) destroyIntSet(firstSetArray[i]);
-        }
-        arrfree(firstSetArray);
+        IntSet *followSetForRoot = createIntSet();
+        ItemElement *element;
+        putInSet(followSetForRoot, arrlen(symbols) - 1);
+        element = createItemElement(0, 0, 0, followSetForRoot);
+        destroyIntSet(followSetForRoot);
+        
+        arrput(items, getClosureOf(element, symbols, rules, firstSetArray));
+
+        traverseItemAndResolveGotos(&items, &gotos, &traverseIndex, symbols, rules, firstSetArray);
+
+        printItems(items, symbols, rules);
+        printGotos(gotos, symbols);
+    }
+
+    {
+        int i;
+        for (i = 0; i < arrlen(firstSetArray); ++i) destroyIntSet(firstSetArray[i]);
     }
 
 
+    arrfree(firstSetArray);
+    destroyItems(items);
+    freeGotos(gotos);
     arrfree(symbols);
     freeRules(rules);
 
@@ -509,47 +525,47 @@ IntSet *firstOf(IntSet **result, int symbolIndex, Symbol *symbols, int ***rules)
 }
 
 IntSet **getFirstSetArray(Symbol *symbols, int ***rules) {
-   IntSet **result = NULL; 
+    IntSet **result = NULL; 
 
-   int ***nullableRemovedRules;
-   Symbol *leftRecursionEliminatedSymbols;
-   int ***leftRecursionEliminatedRules;
+    int ***nullableRemovedRules;
+    Symbol *leftRecursionEliminatedSymbols;
+    int ***leftRecursionEliminatedRules;
 
-   IntSet *nullables = fixNullables(symbols, rules, &nullableRemovedRules);
+    IntSet *nullables = fixNullables(symbols, rules, &nullableRemovedRules);
 
-   eliminateLeftRecursion(symbols, nullableRemovedRules, &leftRecursionEliminatedSymbols, &leftRecursionEliminatedRules);
+    eliminateLeftRecursion(symbols, nullableRemovedRules, &leftRecursionEliminatedSymbols, &leftRecursionEliminatedRules);
 
-   {
-       int i;
-       for (i = 0; i < arrlen(symbols); ++i) arrput(result, createIntSet());
-   }
+    {
+        int i;
+        for (i = 0; i < arrlen(symbols); ++i) arrput(result, createIntSet());
+    }
 
-   {
-       int i;
-       for (i = 0; i < arrlen(symbols); ++i) {
-           (void)firstOf(result, i, leftRecursionEliminatedSymbols, leftRecursionEliminatedRules);
-       }
-   }
-
-
-   {
-       int emptySymbol = getIndexOfSymbol(symbols, "#");
-       int *nullablesArray = getContentsOfSet(nullables);
-       int i;
-       for (i = 0; i < arrlen(nullablesArray); ++i) {
-           putInSet(result[nullablesArray[i]], emptySymbol);
-       }
-
-       arrfree(nullablesArray);
-   }
+    {
+        int i;
+        for (i = 0; i < arrlen(symbols); ++i) {
+            (void)firstOf(result, i, leftRecursionEliminatedSymbols, leftRecursionEliminatedRules);
+        }
+    }
 
 
-   destroyIntSet(nullables);
-   arrfree(leftRecursionEliminatedSymbols);
-   freeRules(leftRecursionEliminatedRules);
-   freeRules(nullableRemovedRules);
+    {
+        int emptySymbol = getIndexOfSymbol(symbols, "#");
+        int *nullablesArray = getContentsOfSet(nullables);
+        int i;
+        for (i = 0; i < arrlen(nullablesArray); ++i) {
+            putInSet(result[nullablesArray[i]], emptySymbol);
+        }
 
-   return result;
+        arrfree(nullablesArray);
+    }
+
+
+    destroyIntSet(nullables);
+    arrfree(leftRecursionEliminatedSymbols);
+    freeRules(leftRecursionEliminatedRules);
+    freeRules(nullableRemovedRules);
+
+    return result;
 }
 
 
@@ -571,7 +587,7 @@ IntSet *getFirstOfSubRule(Symbol *symbols, int *rule, int startIndex, IntSet **f
         }
         arrfree(contents);
     }
-    
+
     if (nextVariable >= arrlen(rule)) putInSet(result, arrlen(symbols) - 2);
     return result;
 }
@@ -590,60 +606,68 @@ IntSet *getFollowOfSingleRunClosure(ItemElement *root, Symbol *symbols, int ***r
 }
 
 ItemElement **getSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
-    int symbolIndexUnderDot = rules[root->variableIndex][root->ruleIndex][root->dotIndex];
-    Symbol symbolUnderDot = symbols[symbolIndexUnderDot];
-    if (symbolUnderDot.isTerminal) return NULL;
-    else {
-        ItemElement **result = NULL; 
-        IntSet *follow = getFollowOfSingleRunClosure(root, symbols, rules, firstSetArray);
-        
-        int ruleIndex;
-        for (ruleIndex = 0; ruleIndex < arrlen(rules[symbolIndexUnderDot]); ++ruleIndex) {
-            ItemElement *closureElement = createItemElement(symbolIndexUnderDot, ruleIndex, 0, follow);
-            arrput(result, closureElement);
-        }
+    if (root->dotIndex >= arrlen(rules[root->variableIndex][root->ruleIndex])) return NULL;
+    {
+        int symbolIndexUnderDot = rules[root->variableIndex][root->ruleIndex][root->dotIndex];
+        Symbol symbolUnderDot = symbols[symbolIndexUnderDot];
+        if (symbolUnderDot.isTerminal) return NULL;
+        else {
+            ItemElement **result = NULL; 
+            IntSet *follow = getFollowOfSingleRunClosure(root, symbols, rules, firstSetArray);
 
-        destroyIntSet(follow);
-        return result;
+            int ruleIndex;
+            for (ruleIndex = 0; ruleIndex < arrlen(rules[symbolIndexUnderDot]); ++ruleIndex) {
+                ItemElement *closureElement = createItemElement(symbolIndexUnderDot, ruleIndex, 0, follow);
+                arrput(result, closureElement);
+            }
+
+            destroyIntSet(follow);
+            return result;
+        }
     }
 }
 
 ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
-   ItemElement **item = NULL; 
-   arrput(item, root);
+    ItemElement **item = NULL; 
+    arrput(item, root);
 
-   {
-       int found = 1;
-       while (found) {
-           int currentLength = arrlen(item);
-           found = 0;
-           {
-               int elementIndex;
-               for (elementIndex = 0; elementIndex < currentLength; ++elementIndex) {
-                   ItemElement *element = item[elementIndex];
-                   ItemElement **singleRunClosure = getSingleRunClosure(element, symbols, rules, firstSetArray);
-                   int closureIndex;
-                   for (closureIndex = 0; closureIndex < arrlen(singleRunClosure); ++closureIndex) {
-                       ItemElement *closure = singleRunClosure[closureIndex];
-                       int checkIndex;
-                       for (checkIndex = 0; checkIndex < arrlen(item); ++checkIndex) {
-                           if (elementsAreSame(item[checkIndex], closure)) {
-                               break;
-                           }
-                       }
-                       if (checkIndex >= arrlen(item)) {
-                           found = 1;
-                           arrput(item, closure);
-                       }
-                       else destroyItemElement(closure);
-                   }
-                   arrfree(singleRunClosure);
-               }
-           }
-       }
-   }
+    {
+        int found = 1;
+        while (found) {
+            int currentLength = arrlen(item);
+            found = 0;
+            {
+                int elementIndex;
+                for (elementIndex = 0; elementIndex < currentLength; ++elementIndex) {
+                    ItemElement *element = item[elementIndex];
+                    ItemElement **singleRunClosure = getSingleRunClosure(element, symbols, rules, firstSetArray);
+                    int closureIndex;
+                    for (closureIndex = 0; closureIndex < arrlen(singleRunClosure); ++closureIndex) {
+                        ItemElement *closure = singleRunClosure[closureIndex];
+                        int checkIndex;
+                        for (checkIndex = 0; checkIndex < arrlen(item); ++checkIndex) {
+                            if (elementsAreSame(item[checkIndex], closure)) {
+                                break;
+                            }
+                        }
+                        if (checkIndex >= arrlen(item)) {
+                            int bodyMatch = itemElementMatchesIn(item, closure);
+                            if (bodyMatch < 0) arrput(item, closure);
+                            else {
+                                mergeItemElementFollows(item[bodyMatch], closure);
+                                destroyItemElement(closure);
+                            }
+                            found = 1;
+                        }
+                        else destroyItemElement(closure);
+                    }
+                    arrfree(singleRunClosure);
+                }
+            }
+        }
+    }
 
-   return item;
+    return item;
 }
 
 void printItem(ItemElement **item, Symbol *symbols, int ***rules) {
@@ -659,19 +683,113 @@ void destroyItem(ItemElement **item) {
     arrfree(item);
 }
 
+int itemElementMatchesIn(ItemElement **item, ItemElement *itemElement) {
+    int i;
+    for (i = 0; i < arrlen(item); ++i) {
+        ItemElement *sourceElement = item[i];
+        if (elementsHaveSameBody(sourceElement, itemElement)) return i;
+    }
+    return -1;
+}
+
 int itemsAreEssentiallySame(ItemElement **item1, ItemElement **item2) {
     if (arrlen(item1) != arrlen(item2)) return 0;
     else {
         int i;
         for (i = 0; i < arrlen(item1); ++i) {
             ItemElement *element1 = item1[i];
-            int j;
-            for (j = 0; j < arrlen(item2); ++j) {
-                ItemElement *element2 = item2[j];
-                if (elementsHaveSameBody(element1, element2)) break;
-            }
-            if (j >= arrlen(item2)) return 0;
+            if (itemElementMatchesIn(item2, element1) == -1) return 0;
         }
         return 1;
+    }
+}
+
+void mergeItem(ItemElement **destination, ItemElement **source) {
+    int sourceIndex;
+    for (sourceIndex = 0; sourceIndex < arrlen(source); ++sourceIndex) {
+        int destinationIndex = itemElementMatchesIn(destination, source[sourceIndex]);
+        if (destinationIndex < 0) {
+            fprintf(stderr, "Something went wrong, cannot find matching item element to merge with!");
+            exit(1);
+        }
+        mergeItemElementFollows(destination[destinationIndex], source[sourceIndex]);
+    }
+}
+
+int getMatchingItem(ItemElement ***items, ItemElement **item) {
+    int i;
+    for (i = 0; i < arrlen(items); ++i) {
+        if (itemsAreEssentiallySame(items[i], item)) return i;
+    }
+    return -1;
+}
+
+void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddress, int *traverseIndexAddress, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
+    ItemElement **item = *itemsAddress[*traverseIndexAddress];
+    int *gotoArray = NULL; 
+
+    {
+        int i;
+        for (i = 0; i < arrlen(symbols); ++i) {
+            arrput(gotoArray, -1);
+        }
+    }
+
+    {
+        int elementIndex;
+        for (elementIndex = 0; elementIndex < arrlen(item); ++elementIndex) {
+
+            ItemElement *element = item[elementIndex];
+            ItemElement *nextElement = getNextElement(element, rules);
+            if (nextElement) {
+                int symbolThatGotTraversed = rules[element->variableIndex][element->ruleIndex][element->dotIndex];
+                ItemElement **closureItem = getClosureOf(nextElement, symbols, rules, firstSetArray);
+                int previousMatchIndex = getMatchingItem(*itemsAddress, closureItem);
+                if (previousMatchIndex >= 0) {
+                    mergeItem(*itemsAddress[previousMatchIndex], closureItem);
+                    destroyItem(closureItem);
+
+                    gotoArray[symbolThatGotTraversed] = previousMatchIndex;
+                }
+                else {
+                    arrput(*itemsAddress, closureItem);
+                    gotoArray[symbolThatGotTraversed] = arrlen(*itemsAddress) - 1;
+                }
+            }
+        }
+
+        arrput(*gotosAddress, gotoArray);
+        *traverseIndexAddress = *traverseIndexAddress + 1;
+    }
+}
+
+void printItems(ItemElement ***items, Symbol *symbols, int ***rules) {
+    int i;
+    for (i = 0; i < arrlen(items); ++i) {
+        printf("______________________\nI%d\n______________________\n", i);
+        printItem(items[i], symbols, rules);
+    }
+}
+
+void destroyItems(ItemElement ***items) {
+    int i;
+    for (i = 0; i < arrlen(items); ++i) destroyItem(items[i]);
+    arrfree(items);
+}
+
+void freeGotos(int **gotos) {
+    int i;
+    for (i = 0; i < arrlen(gotos); ++i) arrfree(gotos[i]);
+    arrfree(gotos);
+}
+
+void printGotos(int **gotos, Symbol *symbols) {
+    int i;
+    for (i = 0; i < arrlen(gotos); ++i) {
+        int j;
+        for (j = 0; j < arrlen(gotos[i]); ++j) {
+            if (gotos[i][j] >= 0) printf("I%d ----%s---> I%d\n", i, symbols[j].name, gotos[i][j]);
+        }
+        printf("\n");
     }
 }

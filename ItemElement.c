@@ -20,8 +20,8 @@ ItemElement *createItemElement(int variableIndex, int ruleIndex, int dotIndex, I
 
 ItemElement *getNextElement(ItemElement *element, int ***rules) {
     int *rule = rules[element->variableIndex][element->ruleIndex];
-    if (element->dotIndex == arrlen(rule) - 1) return NULL;
-    else return createItemElement(element->variableIndex, element->ruleIndex, element->dotIndex + 1, element->allowedFollowSet);
+    if (element->dotIndex == arrlen(rule)) return NULL;
+    return createItemElement(element->variableIndex, element->ruleIndex, element->dotIndex + 1, element->allowedFollowSet);
 }
 
 int elementsAreSame(ItemElement *element1, ItemElement *element2) {
@@ -59,6 +59,7 @@ void printItemElement(ItemElement *element, Symbol *symbols, int ***rules) {
         if (i == element->dotIndex) printf(".");
         printf("%s", symbols[rule[i]].name);
     }
+    if (i == element->dotIndex) printf(".");
     {
         int *follows = getContentsOfSet(element->allowedFollowSet);
         printf(",");
@@ -69,6 +70,15 @@ void printItemElement(ItemElement *element, Symbol *symbols, int ***rules) {
         arrfree(follows);
     }
     printf("\n");
+}
+
+void mergeItemElementFollows(ItemElement *destination, ItemElement *source) {
+    int *sourceFollowContent = getContentsOfSet(source->allowedFollowSet);
+    int i;
+    for (i = 0; i < arrlen(sourceFollowContent); ++i) {
+        putInSet(destination->allowedFollowSet, sourceFollowContent[i]);
+    }
+    arrfree(sourceFollowContent);
 }
 
 void destroyItemElement(ItemElement *itemElement) {
