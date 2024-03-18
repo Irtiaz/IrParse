@@ -829,7 +829,7 @@ void logRules(FILE *logFile, int ***rules) {
     int i;
     for (i = 0; i < arrlen(rules); ++i) {
         int j;
-        for (j = 0; j < arrlen(rules[j]); ++j) ++sum;
+        for (j = 0; j < arrlen(rules[i]); ++j) ++sum;
     }
 
     fprintf(logFile, "%d\n", sum);
