@@ -43,48 +43,63 @@ void destroyItems(ItemElement ***items);
 void freeGotos(int **gotos);
 void printGotos(int **gotos, Symbol *symbols);
 
-int main(void) {
-    Symbol *symbols;
-    int ***rules;
-    IntSet **firstSetArray;
+int getSingleRuleIndex(int ***rules, int variableIndex, int ruleIndex);
+void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *symbols, int ***rules);
+void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemElement ***items, int **gotos);
+void logSymbols(FILE *logFile, Symbol *symbols);
+void logRules(FILE *logFile, int ***rules);
+int getReducer(ItemElement **item, int symbolIndex, int ***rules);
 
-    ItemElement ***items = NULL;
-    int **gotos = NULL;
-
-    parseFromGrammarFile("expression-grammar.txt", &symbols, &rules);
-    printGrammarInfo(symbols, rules, arrlen(rules));
-
-    firstSetArray = getFirstSetArray(symbols, rules);
-    {
-        int traverseIndex = 0;
-
-        IntSet *followSetForRoot = createIntSet();
-        ItemElement *element;
-        putInSet(followSetForRoot, arrlen(symbols) - 1);
-        element = createItemElement(0, 0, 0, followSetForRoot);
-        destroyIntSet(followSetForRoot);
-
-        arrput(items, getClosureOf(element, symbols, rules, firstSetArray));
-
-        while (traverseIndex < arrlen(items)) traverseItemAndResolveGotos(&items, &gotos, &traverseIndex, symbols, rules, firstSetArray);
-
-        printItems(items, symbols, rules);
-        printGotos(gotos, symbols);
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "Wrong usage! Correct usage: ./a.out grammar-file.txt\n");
+        exit(1);
     }
+    else {
+        Symbol *symbols;
+        int ***rules;
+        IntSet **firstSetArray;
 
-    {
-        int i;
-        for (i = 0; i < arrlen(firstSetArray); ++i) destroyIntSet(firstSetArray[i]);
+        ItemElement ***items = NULL;
+        int **gotos = NULL;
+
+        parseFromGrammarFile(argv[1], &symbols, &rules);
+        printGrammarInfo(symbols, rules, arrlen(rules));
+
+        firstSetArray = getFirstSetArray(symbols, rules);
+        {
+            int traverseIndex = 0;
+
+            IntSet *followSetForRoot = createIntSet();
+            ItemElement *element;
+            putInSet(followSetForRoot, arrlen(symbols) - 1);
+            element = createItemElement(0, 0, 0, followSetForRoot);
+            destroyIntSet(followSetForRoot);
+
+            arrput(items, getClosureOf(element, symbols, rules, firstSetArray));
+
+            while (traverseIndex < arrlen(items)) traverseItemAndResolveGotos(&items, &gotos, &traverseIndex, symbols, rules, firstSetArray);
+
+            printItems(items, symbols, rules);
+            printGotos(gotos, symbols);
+        }
+
+        {
+            int i;
+            for (i = 0; i < arrlen(firstSetArray); ++i) destroyIntSet(firstSetArray[i]);
+        }
+
+        logParseTable("parse-table.txt", symbols, rules, items, gotos);
+
+
+        arrfree(firstSetArray);
+        destroyItems(items);
+        freeGotos(gotos);
+        arrfree(symbols);
+        freeRules(rules);
+
+        return 0;
     }
-
-
-    arrfree(firstSetArray);
-    destroyItems(items);
-    freeGotos(gotos);
-    arrfree(symbols);
-    freeRules(rules);
-
-    return 0;
 }
 
 void freeRules(int ***rules) {
@@ -621,12 +636,14 @@ ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, Int
 
     {
         int found = 1;
+        int currentLength = 0;
         while (found) {
-            int currentLength = arrlen(item);
+            int startIndex = currentLength;
+            currentLength = arrlen(item);
             found = 0;
             {
                 int elementIndex;
-                for (elementIndex = 0; elementIndex < currentLength; ++elementIndex) {
+                for (elementIndex = startIndex; elementIndex < currentLength; ++elementIndex) {
                     ItemElement *element = item[elementIndex];
                     ItemElement **singleRunClosure = getSingleRunClosure(element, symbols, rules, firstSetArray);
                     int closureIndex;
@@ -639,7 +656,7 @@ ItemElement **getClosureOf(ItemElement *root, Symbol *symbols, int ***rules, Int
                             }
                         }
                         if (checkIndex >= currentLength) {
-                            
+
                             int bodyMatch = itemElementMatchesIn(item, closure);
                             if (bodyMatch < 0) {
                                 arrput(item, closure);
@@ -797,4 +814,102 @@ void printGotos(int **gotos, Symbol *symbols) {
             if (gotos[i][j] >= 0) printf("I%d ----%s---> I%d\n", i, symbols[j].name, gotos[i][j]);
         }
     }
+}
+
+void logSymbols(FILE *logFile, Symbol *symbols) {
+    int i;
+    fprintf(logFile, "%ld\n", arrlen(symbols));
+    for (i = 0; i < arrlen(symbols); ++i) {
+        fprintf(logFile, "%s %d\n", symbols[i].name, symbols[i].isTerminal);
+    }
+}
+
+void logRules(FILE *logFile, int ***rules) {
+    int sum = 0;
+    int i;
+    for (i = 0; i < arrlen(rules); ++i) {
+        int j;
+        for (j = 0; j < arrlen(rules[j]); ++j) ++sum;
+    }
+
+    fprintf(logFile, "%d\n", sum);
+
+    for (i = 0; i < arrlen(rules); ++i) {
+        int j;
+        for (j = 0; j < arrlen(rules[i]); ++j) {
+            int k;
+            fprintf(logFile, "%ld\n%d ", arrlen(rules[i][j]) + 1, i);
+            for (k = 0; k < arrlen(rules[i][j]); ++k) fprintf(logFile, "%d ", rules[i][j][k]);
+            fprintf(logFile, "\n");
+        }
+    }
+}
+
+int getSingleRuleIndex(int ***rules, int variableIndex, int ruleIndex) {
+    int index = 0;
+    int i;
+    for (i = 0; i <= variableIndex; ++i) {
+        int j;
+        for (j = 0; j < (i < variableIndex? arrlen(rules[i]) : ruleIndex); ++j) ++index;
+    }
+    return index;
+}
+
+int getReducer(ItemElement **item, int symbolIndex, int ***rules) {
+    int i;
+    int answer = -1;
+    for (i = 0; i < arrlen(item); ++i) {
+        ItemElement *element = item[i];
+        int *rule = rules[element->variableIndex][element->ruleIndex];
+        if (element->dotIndex == arrlen(rule) && existsInSet(element->allowedFollowSet, symbolIndex)) {
+            if (answer != -1) {
+                puts("REDUCE-REDUCE CONFLICT FOUND");
+                return answer;
+            }
+            else answer = getSingleRuleIndex(rules, element->variableIndex, element->ruleIndex);
+        }
+    }
+    return answer;
+}
+
+void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *symbols, int ***rules) {
+    int itemIndex;
+    fprintf(logFile, "%ld\n", arrlen(items));
+    for (itemIndex = 0; itemIndex < arrlen(items); ++itemIndex) {
+        ItemElement **item = items[itemIndex];
+        int symbolIndex;
+        for (symbolIndex = 1; symbolIndex < arrlen(symbols); ++symbolIndex) {
+            if (symbols[symbolIndex].isTerminal) {
+                int shiftValue = gotos[itemIndex][symbolIndex];
+                int reduceValue = getReducer(item, symbolIndex, rules);
+                
+                if (shiftValue >= 0 && reduceValue >= 0) puts("SHIFT-REDUCE CONFLICT FOUND");
+
+                if (shiftValue >= 0) fprintf(logFile, "s%d ", shiftValue);
+                else {
+                    if (reduceValue >= 0) fprintf(logFile, "r%d ", reduceValue);
+                    else fprintf(logFile, "x ");
+                }
+            }
+            else {
+                fprintf(logFile, "%d ", gotos[itemIndex][symbolIndex]);
+            }
+        }
+        fprintf(logFile, "\n");
+    }
+}
+
+void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemElement ***items, int **gotos) {
+    FILE *logFile = fopen(logFileName, "w");
+
+    if (!logFile) {
+        fprintf(stderr, "Could not open log file : %s\n", logFileName);
+        exit(1);
+    }
+
+    logSymbols(logFile, symbols);
+    logRules(logFile, rules);
+    logItemsAndGotos(logFile, items, gotos, symbols, rules);
+
+    fclose(logFile);
 }
