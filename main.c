@@ -830,9 +830,9 @@ void logSymbols(FILE *logFile, Symbol *symbols) {
         if (symbols[i].isTerminal) break;
     }
 
-    fprintf(logFile, "%ld %d\n", arrlen(symbols) - i, i - 1);
+    fprintf(logFile, "%ld %d\n", arrlen(symbols) - i - 2, i - 1);
 
-    for (; i < arrlen(symbols); ++i) {
+    for (; i < arrlen(symbols) - 2; ++i) {
         if (symbols[i].isTerminal) fprintf(logFile, "%s\n", symbols[i].name);
     }
 }
