@@ -42,6 +42,9 @@ void printItems(ItemElement ***items, Symbol *symbols, int ***rules);
 void destroyItems(ItemElement ***items);
 void freeGotos(int **gotos);
 void printGotos(int **gotos, Symbol *symbols);
+ItemElement **mergeClosures(ItemElement **itemElements, Symbol *symbols, int ***rules, IntSet **firstSetArray);
+ItemElement **getNexts(ItemElement **item, int symbolIndex, int ***rules);
+ItemElement **getMergedClosure(ItemElement **item, int symbolIndex, Symbol *symbols, int ***rules, IntSet **firstSetArray);
 
 int getSingleRuleIndex(int ***rules, int variableIndex, int ruleIndex);
 void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *symbols, int ***rules);
@@ -77,7 +80,7 @@ int main(int argc, char **argv) {
             destroyIntSet(followSetForRoot);
 
             arrput(items, getClosureOf(element, symbols, rules, firstSetArray));
-
+            
             while (traverseIndex < arrlen(items)) traverseItemAndResolveGotos(&items, &gotos, &traverseIndex, symbols, rules, firstSetArray);
 
             printItems(items, symbols, rules);
@@ -90,7 +93,6 @@ int main(int argc, char **argv) {
         }
 
         logParseTable("parse-table.txt", symbols, rules, items, gotos);
-
 
         arrfree(firstSetArray);
         destroyItems(items);
@@ -729,10 +731,11 @@ void mergeItem(ItemElement **destination, ItemElement **source) {
     for (sourceIndex = 0; sourceIndex < arrlen(source); ++sourceIndex) {
         int destinationIndex = itemElementMatchesIn(destination, source[sourceIndex]);
         if (destinationIndex < 0) {
-            fprintf(stderr, "Something went wrong, cannot find matching item element to merge with!");
-            exit(1);
+            arrput(destination, createItemElement(source[sourceIndex]->variableIndex, source[sourceIndex]->ruleIndex, source[sourceIndex]->dotIndex, source[sourceIndex]->allowedFollowSet));
         }
-        mergeItemElementFollows(destination[destinationIndex], source[sourceIndex]);
+        else {
+            mergeItemElementFollows(destination[destinationIndex], source[sourceIndex]);
+        }
     }
 }
 
@@ -756,24 +759,21 @@ void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddre
     }
 
     {
-        int elementIndex;
-        for (elementIndex = 0; elementIndex < arrlen(item); ++elementIndex) {
-
-            ItemElement *element = item[elementIndex];
-            ItemElement *nextElement = getNextElement(element, rules);
-            if (nextElement) {
-                int symbolThatGotTraversed = rules[element->variableIndex][element->ruleIndex][element->dotIndex];
-                ItemElement **closureItem = getClosureOf(nextElement, symbols, rules, firstSetArray);
+        int symbolIndex;
+        for (symbolIndex = 1; symbolIndex < arrlen(symbols); ++symbolIndex) {
+            ItemElement **closureItem = getMergedClosure(item, symbolIndex, symbols, rules, firstSetArray);
+            if (closureItem) {
                 int previousMatchIndex = getMatchingItem(*itemsAddress, closureItem);
+
                 if (previousMatchIndex >= 0) {
                     mergeItem((*itemsAddress)[previousMatchIndex], closureItem);
                     destroyItem(closureItem);
 
-                    gotoArray[symbolThatGotTraversed] = previousMatchIndex;
+                    gotoArray[symbolIndex] = previousMatchIndex;
                 }
                 else {
                     arrput(*itemsAddress, closureItem);
-                    gotoArray[symbolThatGotTraversed] = arrlen(*itemsAddress) - 1;
+                    gotoArray[symbolIndex] = arrlen(*itemsAddress) - 1;
                 }
             }
         }
@@ -912,4 +912,42 @@ void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemE
     logItemsAndGotos(logFile, items, gotos, symbols, rules);
 
     fclose(logFile);
+}
+
+ItemElement **mergeClosures(ItemElement **itemElements, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
+    int i;
+    ItemElement **result;
+    
+    if (!itemElements) return NULL;
+
+    result = getClosureOf(itemElements[0], symbols, rules, firstSetArray);
+    for (i = 1; i < arrlen(itemElements); ++i) {
+        ItemElement **closure = getClosureOf(itemElements[i], symbols, rules, firstSetArray);
+        mergeItem(result, closure);
+        destroyItem(closure);
+    }
+    return result;
+}
+
+ItemElement **getNexts(ItemElement **item, int symbolIndex, int ***rules) {
+    ItemElement **result = NULL;
+    int elementIndex;
+    for (elementIndex = 0; elementIndex < arrlen(item); ++elementIndex) {
+        ItemElement *element = item[elementIndex];
+        int *rule = rules[element->variableIndex][element->ruleIndex];
+        if (element->dotIndex < arrlen(rule) && rule[element->dotIndex] == symbolIndex) {
+            arrput(result, getNextElement(element, rules));
+        }
+    }
+    return result;
+}
+
+ItemElement **getMergedClosure(ItemElement **item, int symbolIndex, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
+    ItemElement **nexts = getNexts(item, symbolIndex, rules);
+    if (!nexts) return NULL;
+    else {
+        ItemElement **closure = mergeClosures(nexts, symbols, rules, firstSetArray);
+        arrfree(nexts);
+        return closure;
+    }
 }
