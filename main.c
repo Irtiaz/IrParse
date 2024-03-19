@@ -16,11 +16,12 @@ typedef struct {
 } RuleDescriptor;
 
 char tokens[][TOKEN_NAME_MAX_LENGTH] = {
-    "id", "+", "id"
+   "id", "+", "id", "*", "id", "$" 
 };
 int tokenIndex = 0;
 
-char *getNextToken();
+char *getNextToken(void);
+void parse(StringHashMapItem *tokenMap, RuleDescriptor *descriptors, int **table);
 
 int main(void) {
     FILE *parseTableFile;
@@ -92,6 +93,10 @@ int main(void) {
         }
     }
 
+    parse(tokenMap, descriptors, table);
+
+
+
     {
         int row;
         for (row = 0; row < rowCount; ++row) {
@@ -99,8 +104,6 @@ int main(void) {
         }
         free(table);
     }
-
-
     free(descriptors);
     shfree(tokenMap);
     fclose(parseTableFile);
@@ -108,6 +111,57 @@ int main(void) {
     return 0;
 }
 
-char *getNextToken() {
+char *getNextToken(void) {
     return tokens[tokenIndex++];
+}
+
+
+void parse(StringHashMapItem *tokenMap, RuleDescriptor *descriptors, int **table) {
+    int *stateStack = NULL;
+    int lookahead = shget(tokenMap, getNextToken());
+    int inputRightEndMarker = shget(tokenMap, "$");
+
+    arrput(stateStack, 0);
+
+    while (1) {
+       int currentState = stateStack[arrlen(stateStack) - 1]; 
+       int tableValue = table[currentState][lookahead];
+
+       if (currentState == 1 && lookahead == inputRightEndMarker) {
+           puts("Successfully parsed");
+           break;
+       }
+
+       if (tableValue) {
+
+           if (tableValue > 0) {
+               arrput(stateStack, tableValue);
+               lookahead = shget(tokenMap, getNextToken());
+           }
+           else {
+               RuleDescriptor descriptor = descriptors[-tableValue - 1];
+               int i;
+               for (i = 0; i < descriptor.popCount; ++i) {
+                   arrdel(stateStack, arrlen(stateStack) - 1);
+               }
+
+               currentState = stateStack[arrlen(stateStack) - 1]; 
+               tableValue = table[currentState][descriptor.variableColumnIndex];
+
+               if (tableValue) arrput(stateStack, tableValue);
+               else {
+                   puts("Syntax error");
+                   break;
+               }
+           }
+
+       }
+
+       else {
+           puts("Syntax error");
+           break;
+       }
+    }
+
+    arrfree(stateStack);
 }
