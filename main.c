@@ -897,7 +897,7 @@ void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *
 
                 if (shiftValue >= 0) fprintf(logFile, "%d ", shiftValue);
                 else {
-                    if (reduceValue >= 0) fprintf(logFile, "%d ", -(reduceValue - 1));
+                    if (reduceValue >= 0) fprintf(logFile, "%d ", -reduceValue);
                     else fprintf(logFile, "0 ");
                 }
             }
