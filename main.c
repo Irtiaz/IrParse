@@ -45,6 +45,8 @@ void printGotos(int **gotos, Symbol *symbols);
 ItemElement **mergeClosures(ItemElement **itemElements, Symbol *symbols, int ***rules, IntSet **firstSetArray);
 ItemElement **getNexts(ItemElement **item, int symbolIndex, int ***rules);
 ItemElement **getMergedClosure(ItemElement **item, int symbolIndex, Symbol *symbols, int ***rules, IntSet **firstSetArray);
+ItemElement *getElementByRuleAndDot(ItemElement **item, int variableIndex, int ruleIndex, int dotIndex);
+void propagateFollow(int itemIndex, ItemElement ***items, int **gotos, int ***rules);
 
 int getSingleRuleIndex(int ***rules, int variableIndex, int ruleIndex);
 void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *symbols, int ***rules);
@@ -52,6 +54,7 @@ void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemE
 void logSymbols(FILE *logFile, Symbol *symbols);
 void logRules(FILE *logFile, int ***rules);
 int getReducer(ItemElement **item, int symbolIndex, int ***rules);
+
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -65,6 +68,7 @@ int main(int argc, char **argv) {
 
         ItemElement ***items = NULL;
         int **gotos = NULL;
+
 
         parseFromGrammarFile(argv[1], &symbols, &rules);
         printGrammarInfo(symbols, rules, arrlen(rules));
@@ -768,6 +772,10 @@ void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddre
                 if (previousMatchIndex >= 0) {
                     mergeItem((*itemsAddress)[previousMatchIndex], closureItem);
                     destroyItem(closureItem);
+                    printf("before propagation: traverseIndex: %d, matchIndex: %d, arrlen: %ld\n", *traverseIndexAddress, previousMatchIndex, arrlen(*itemsAddress)); 
+                    propagateFollow(previousMatchIndex, *itemsAddress, *gotosAddress, rules);
+                    puts("done");
+
 
                     gotoArray[symbolIndex] = previousMatchIndex;
                 }
@@ -950,4 +958,60 @@ ItemElement **getMergedClosure(ItemElement **item, int symbolIndex, Symbol *symb
         arrfree(nexts);
         return closure;
     }
+}
+
+ItemElement *getElementByRuleAndDot(ItemElement **item, int variableIndex, int ruleIndex, int dotIndex) {
+    int elementIndex;
+    for (elementIndex = 0; elementIndex < arrlen(item); ++elementIndex) {
+        ItemElement *element = item[elementIndex];
+        if (element->variableIndex == variableIndex && element->ruleIndex == ruleIndex && element->dotIndex == dotIndex) return element;
+    }
+    return NULL;
+}
+
+void propagateFollow(int itemIndex, ItemElement ***items, int **gotos, int ***rules) {
+    ItemElement **item = items[itemIndex];
+    int elementIndex;
+    
+    int *nextPropagations = NULL;
+
+    for (elementIndex = 0; elementIndex < arrlen(item); ++elementIndex) {
+        ItemElement *element = item[elementIndex];
+        int *rule = rules[element->variableIndex][element->ruleIndex];
+        if (element->dotIndex < arrlen(rule)) {
+            int symbolIndexUnderDot = rule[element->dotIndex];
+            if (itemIndex < arrlen(gotos) && gotos[itemIndex][symbolIndexUnderDot] >= 0) {
+                int nextItemIndex = gotos[itemIndex][symbolIndexUnderDot];
+                ItemElement **nextItem = items[nextItemIndex];
+                ItemElement *correspondingElement = getElementByRuleAndDot(nextItem, element->variableIndex, element->ruleIndex, element->dotIndex + 1);
+                if (correspondingElement) {
+                    if (!isSuperSet(correspondingElement->allowedFollowSet, element->allowedFollowSet)) {
+                        int *elementFollows = getContentsOfSet(element->allowedFollowSet);
+                        int i;
+                        for (i = 0; i < arrlen(elementFollows); ++i) {
+                            putInSet(correspondingElement->allowedFollowSet, elementFollows[i]);
+                        }
+                        arrfree(elementFollows);
+
+                        arrput(nextPropagations, nextItemIndex);
+                    }
+                }
+                else {
+                    fprintf(stderr, "Could not find corresponding element! Something went wrong perhaps\n");
+                    exit(1);
+                }
+            }
+        }
+    }
+    
+    {
+        int i;
+        for (i = 0; i < arrlen(nextPropagations); ++i) {
+            printf("gonna propagate %d\n", nextPropagations[i]);
+            propagateFollow(nextPropagations[i], items, gotos, rules);
+            printf("done propagating %d\n", nextPropagations[i]);
+        }
+        arrfree(nextPropagations);
+    }
+
 }
