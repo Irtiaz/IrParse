@@ -47,13 +47,12 @@ ItemElement **getNexts(ItemElement **item, int symbolIndex, int ***rules);
 ItemElement **getMergedClosure(ItemElement **item, int symbolIndex, Symbol *symbols, int ***rules, IntSet **firstSetArray);
 ItemElement *getElementByRuleAndDot(ItemElement **item, int variableIndex, int ruleIndex, int dotIndex);
 void propagateFollow(int itemIndex, ItemElement ***items, int **gotos, int ***rules);
-
 int getSingleRuleIndex(int ***rules, int variableIndex, int ruleIndex);
 void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *symbols, int ***rules);
-void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemElement ***items, int **gotos);
 void logSymbols(FILE *logFile, Symbol *symbols);
 void logRules(FILE *logFile, int ***rules);
 int getReducer(ItemElement **item, int symbolIndex, int ***rules);
+void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemElement ***items, int **gotos);
 
 
 int main(int argc, char **argv) {
@@ -826,29 +825,31 @@ void printGotos(int **gotos, Symbol *symbols) {
 
 void logSymbols(FILE *logFile, Symbol *symbols) {
     int i;
-    fprintf(logFile, "%ld\n", arrlen(symbols));
     for (i = 0; i < arrlen(symbols); ++i) {
-        fprintf(logFile, "%s %d\n", symbols[i].name, symbols[i].isTerminal);
+        if (symbols[i].isTerminal) break;
+    }
+
+    fprintf(logFile, "%ld %d\n", arrlen(symbols) - i, i - 1);
+
+    for (; i < arrlen(symbols); ++i) {
+        if (symbols[i].isTerminal) fprintf(logFile, "%s\n", symbols[i].name);
     }
 }
 
 void logRules(FILE *logFile, int ***rules) {
     int sum = 0;
     int i;
-    for (i = 0; i < arrlen(rules); ++i) {
+    for (i = 1; i < arrlen(rules); ++i) {
         int j;
         for (j = 0; j < arrlen(rules[i]); ++j) ++sum;
     }
 
     fprintf(logFile, "%d\n", sum);
 
-    for (i = 0; i < arrlen(rules); ++i) {
+    for (i = 1; i < arrlen(rules); ++i) {
         int j;
         for (j = 0; j < arrlen(rules[i]); ++j) {
-            int k;
-            fprintf(logFile, "%ld\n%d ", arrlen(rules[i][j]) + 1, i);
-            for (k = 0; k < arrlen(rules[i][j]); ++k) fprintf(logFile, "%d ", rules[i][j][k]);
-            fprintf(logFile, "\n");
+            fprintf(logFile, "%d %ld\n", i - 1, arrlen(rules[i][j]));
         }
     }
 }
@@ -893,10 +894,10 @@ void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *
                 
                 if (shiftValue >= 0 && reduceValue >= 0) puts("SHIFT-REDUCE CONFLICT FOUND");
 
-                if (shiftValue >= 0) fprintf(logFile, "s%d ", shiftValue);
+                if (shiftValue >= 0) fprintf(logFile, "%d ", shiftValue);
                 else {
-                    if (reduceValue >= 0) fprintf(logFile, "r%d ", reduceValue);
-                    else fprintf(logFile, "x ");
+                    if (reduceValue >= 0) fprintf(logFile, "%d ", -(reduceValue - 1));
+                    else fprintf(logFile, "0 ");
                 }
             }
             else {
