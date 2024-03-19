@@ -55,6 +55,7 @@ int getReducer(ItemElement **item, int symbolIndex, int ***rules);
 void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemElement ***items, int **gotos);
 
 
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "Wrong usage! Correct usage: ./a.out grammar-file.txt\n");
