@@ -15,7 +15,7 @@ int getIndexOfSymbol(Symbol *symbols, const char *symbolName);
 void parseFromGrammarFile(const char *grammarFileName, Symbol **symbolsArray, int ****rulesArray);
 int *concat(int *arr1, int *arr2);
 int *flattenWithSingleRule(int *previousRule, int *laterRule);
-void flattenWithMultipleRules(int ***result, int **previousRules, int *laterRule);
+void flattenWithMultipleRules(int ***result, int **previousRules, int **laterRuleAddress);
 void printGrammarInfo(Symbol *symbols, int ***rules, int ruleBreakPoint);
 void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbol **modifiedSymbols, int ****rulesAfterElimination);
 void freeRules(int ***rules);
@@ -35,7 +35,7 @@ void printItem(ItemElement **item, Symbol *symbols, int ***rules);
 void destroyItem(ItemElement **item);
 int itemsAreEssentiallySame(ItemElement **item1, ItemElement **item2);
 int itemElementMatchesIn(ItemElement **item, ItemElement *itemElement);
-void mergeItem(ItemElement **destination, ItemElement **source);
+void mergeItem(ItemElement ***destinationAddress, ItemElement **source);
 int getMatchingItem(ItemElement ***items, ItemElement **item);
 void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddress, int *traverseIndexAddress, Symbol *symbols, int ***rules, IntSet **firstSetArray);
 void printItems(ItemElement ***items, Symbol *symbols, int ***rules);
@@ -55,7 +55,6 @@ int getReducer(ItemElement **item, int symbolIndex, int ***rules);
 void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemElement ***items, int **gotos);
 
 
-
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "Wrong usage! Correct usage: ./a.out grammar-file.txt\n");
@@ -68,7 +67,6 @@ int main(int argc, char **argv) {
 
         ItemElement ***items = NULL;
         int **gotos = NULL;
-
 
         parseFromGrammarFile(argv[1], &symbols, &rules);
         printGrammarInfo(symbols, rules, arrlen(rules));
@@ -84,7 +82,7 @@ int main(int argc, char **argv) {
             destroyIntSet(followSetForRoot);
 
             arrput(items, getClosureOf(element, symbols, rules, firstSetArray));
-            
+
             while (traverseIndex < arrlen(items)) traverseItemAndResolveGotos(&items, &gotos, &traverseIndex, symbols, rules, firstSetArray);
 
             printItems(items, symbols, rules);
@@ -272,12 +270,14 @@ int *flattenWithSingleRule(int *previousRule, int *laterRule) {
     return flattenedRule;
 }
 
-void flattenWithMultipleRules(int ***result, int **previousRules, int *laterRule) {
+void flattenWithMultipleRules(int ***result, int **previousRules, int **laterRuleAddress) {
     int i;
+    int  *laterRule = *laterRuleAddress;
     arrdel(laterRule, 0);
     for (i = 0; i < arrlen(previousRules); ++i) {
         arrput(*result, flattenWithSingleRule(previousRules[i], laterRule));
     }
+    *laterRuleAddress = laterRule;
 }
 
 void printGrammarInfo(Symbol *symbols, int ***rules, int ruleBreakPoint) {
@@ -302,7 +302,7 @@ void printGrammarInfo(Symbol *symbols, int ***rules, int ruleBreakPoint) {
                     {
                         int j;
                         for (j = 0; j < arrlen(body); ++j) {
-                            printf("%s", symbols[body[j]].name);
+                            printf("%s ", symbols[body[j]].name);
                         }
                     }
                     if (k < arrlen(bodies) - 1) printf(" | ");
@@ -352,7 +352,7 @@ void eliminateLeftRecursion(Symbol *originalSymbols, int ***originalRules, Symbo
                 int *rule = rules[variableIndex][ruleIndex];
                 int firstVariableInRule = rule[0];
                 if (firstVariableInRule < variableIndex) {
-                    flattenWithMultipleRules(&modifiedRules, rules[firstVariableInRule], rule);
+                    flattenWithMultipleRules(&modifiedRules, rules[firstVariableInRule], &rule);
                     arrfree(rule);
                 }
                 else arrput(modifiedRules, rule);
@@ -730,7 +730,8 @@ int itemsAreEssentiallySame(ItemElement **item1, ItemElement **item2) {
     }
 }
 
-void mergeItem(ItemElement **destination, ItemElement **source) {
+void mergeItem(ItemElement ***destinationAddress, ItemElement **source) {
+    ItemElement **destination = *destinationAddress;
     int sourceIndex;
     for (sourceIndex = 0; sourceIndex < arrlen(source); ++sourceIndex) {
         int destinationIndex = itemElementMatchesIn(destination, source[sourceIndex]);
@@ -741,6 +742,7 @@ void mergeItem(ItemElement **destination, ItemElement **source) {
             mergeItemElementFollows(destination[destinationIndex], source[sourceIndex]);
         }
     }
+    *destinationAddress = destination;
 }
 
 int getMatchingItem(ItemElement ***items, ItemElement **item) {
@@ -770,11 +772,9 @@ void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddre
                 int previousMatchIndex = getMatchingItem(*itemsAddress, closureItem);
 
                 if (previousMatchIndex >= 0) {
-                    mergeItem((*itemsAddress)[previousMatchIndex], closureItem);
+                    mergeItem(&((*itemsAddress)[previousMatchIndex]), closureItem);
                     destroyItem(closureItem);
-                    printf("before propagation: traverseIndex: %d, matchIndex: %d, arrlen: %ld\n", *traverseIndexAddress, previousMatchIndex, arrlen(*itemsAddress)); 
                     propagateFollow(previousMatchIndex, *itemsAddress, *gotosAddress, rules);
-                    puts("done");
 
 
                     gotoArray[symbolIndex] = previousMatchIndex;
@@ -933,7 +933,7 @@ ItemElement **mergeClosures(ItemElement **itemElements, Symbol *symbols, int ***
     result = getClosureOf(itemElements[0], symbols, rules, firstSetArray);
     for (i = 1; i < arrlen(itemElements); ++i) {
         ItemElement **closure = getClosureOf(itemElements[i], symbols, rules, firstSetArray);
-        mergeItem(result, closure);
+        mergeItem(&result, closure);
         destroyItem(closure);
     }
     return result;
@@ -1009,9 +1009,7 @@ void propagateFollow(int itemIndex, ItemElement ***items, int **gotos, int ***ru
     {
         int i;
         for (i = 0; i < arrlen(nextPropagations); ++i) {
-            printf("gonna propagate %d\n", nextPropagations[i]);
             propagateFollow(nextPropagations[i], items, gotos, rules);
-            printf("done propagating %d\n", nextPropagations[i]);
         }
         arrfree(nextPropagations);
     }

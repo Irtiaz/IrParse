@@ -57,7 +57,7 @@ void printItemElement(ItemElement *element, Symbol *symbols, int ***rules) {
     printf("%s -> ", symbols[element->variableIndex].name);
     for (i = 0; i < arrlen(rule); ++i) {
         if (i == element->dotIndex) printf(".");
-        printf("%s", symbols[rule[i]].name);
+        printf("%s ", symbols[rule[i]].name);
     }
     if (i == element->dotIndex) printf(".");
     {
