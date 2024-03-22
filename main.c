@@ -609,7 +609,22 @@ int itemElementExistsInItem(ItemElement *element, ItemElement **item) {
 
 IntSet *getFollowOfSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
     int *rule = rules[root->variableIndex][root->ruleIndex];
-    return root->dotIndex < arrlen(rule) - 1? getFirstOfSubRule(symbols, rule, root->dotIndex + 1, firstSetArray) : createCopyOfIntSet(root->allowedFollowSet);
+    if (root->dotIndex < arrlen(rule) - 1) {
+        IntSet *firstSet = getFirstOfSubRule(symbols, rule, root->dotIndex + 1, firstSetArray);
+        if (existsInSet(firstSet, arrlen(symbols) - 2)) {
+            int *itemsInActualFollow = getContentsOfSet(root->allowedFollowSet);
+            int i;
+
+            removeFromSet(firstSet, arrlen(symbols) - 2);
+            for (i = 0; i < arrlen(itemsInActualFollow); ++i) {
+                putInSet(firstSet, itemsInActualFollow[i]);
+            }
+
+            arrfree(itemsInActualFollow);
+        }
+        return firstSet;
+    }
+    else return createCopyOfIntSet(root->allowedFollowSet);
 }
 
 ItemElement **getSingleRunClosure(ItemElement *root, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
