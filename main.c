@@ -539,7 +539,7 @@ IntSet **getFirstSetArray(Symbol *symbols, int ***rules) {
     int ***leftRecursionEliminatedRules;
 
     IntSet *nullables = fixNullables(symbols, rules, &nullableRemovedRules);
-    printf("----------> length of nullables = %d\n", getLengthOfSet(nullables));
+
     eliminateLeftRecursion(symbols, nullableRemovedRules, &leftRecursionEliminatedSymbols, &leftRecursionEliminatedRules);
 
     {
