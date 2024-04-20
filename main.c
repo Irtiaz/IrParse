@@ -432,7 +432,7 @@ IntSet *fixNullables(Symbol *originalSymbols, int ***originalRules, int ****rule
         for (variableIndex = 1; variableIndex < arrlen(rules); ++variableIndex) {
             int ruleIndex;
             for (ruleIndex = arrlen(rules[variableIndex]) - 1; ruleIndex >= 0; --ruleIndex) {
-                if (isNullRule(nullables, rules[variableIndex][ruleIndex]) || isNullRule(nullables, rules[variableIndex][ruleIndex])) {
+                if (isNullRule(nullables, rules[variableIndex][ruleIndex]) || isNullRule(nextIterationNullables, rules[variableIndex][ruleIndex])) {
                     putInSet(newlyFoundNullables, variableIndex);
                     putInSet(nullables, variableIndex);
                     if (arrlen(rules[variableIndex][ruleIndex]) == 1 && rules[variableIndex][ruleIndex][0] == arrlen(symbols) - 2) {
@@ -539,7 +539,7 @@ IntSet **getFirstSetArray(Symbol *symbols, int ***rules) {
     int ***leftRecursionEliminatedRules;
 
     IntSet *nullables = fixNullables(symbols, rules, &nullableRemovedRules);
-
+    printf("----------> length of nullables = %d\n", getLengthOfSet(nullables));
     eliminateLeftRecursion(symbols, nullableRemovedRules, &leftRecursionEliminatedSymbols, &leftRecursionEliminatedRules);
 
     {
