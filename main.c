@@ -51,7 +51,7 @@ int getSingleRuleIndex(int ***rules, int variableIndex, int ruleIndex);
 void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *symbols, int ***rules);
 void logSymbols(FILE *logFile, Symbol *symbols);
 void logRules(FILE *logFile, int ***rules);
-int getReducer(ItemElement **item, int symbolIndex, int ***rules);
+int getReducer(ItemElement ***items, int itemIndex, int symbolIndex, int ***rules);
 void logParseTable(const char *logFileName, Symbol *symbols, int ***rules, ItemElement ***items, int **gotos);
 
 
@@ -770,12 +770,12 @@ int getMatchingItem(ItemElement ***items, ItemElement **item) {
 
 void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddress, int *traverseIndexAddress, Symbol *symbols, int ***rules, IntSet **firstSetArray) {
     ItemElement **item = (*itemsAddress)[*traverseIndexAddress];
-    int *gotoArray = NULL; 
 
+    arrput(*gotosAddress, NULL);
     {
         int i;
         for (i = 0; i < arrlen(symbols); ++i) {
-            arrput(gotoArray, -1);
+            arrput((*gotosAddress)[arrlen(*gotosAddress) - 1], -1);
         }
     }
 
@@ -792,16 +792,15 @@ void traverseItemAndResolveGotos(ItemElement ****itemsAddress, int ***gotosAddre
                     propagateFollow(previousMatchIndex, *itemsAddress, *gotosAddress, rules);
 
 
-                    gotoArray[symbolIndex] = previousMatchIndex;
+                    (*gotosAddress)[arrlen(*gotosAddress) - 1][symbolIndex] = previousMatchIndex;
                 }
                 else {
                     arrput(*itemsAddress, closureItem);
-                    gotoArray[symbolIndex] = arrlen(*itemsAddress) - 1;
+                    (*gotosAddress)[arrlen(*gotosAddress) - 1][symbolIndex] = arrlen(*itemsAddress) - 1;
                 }
             }
         }
 
-        arrput(*gotosAddress, gotoArray);
         *traverseIndexAddress = *traverseIndexAddress + 1;
     }
 }
@@ -880,18 +879,20 @@ int getSingleRuleIndex(int ***rules, int variableIndex, int ruleIndex) {
     return index;
 }
 
-int getReducer(ItemElement **item, int symbolIndex, int ***rules) {
+int getReducer(ItemElement ***items, int itemIndex, int symbolIndex, int ***rules) {
     int i;
     int answer = -1;
+    ItemElement **item = items[itemIndex];
     for (i = 0; i < arrlen(item); ++i) {
         ItemElement *element = item[i];
         int *rule = rules[element->variableIndex][element->ruleIndex];
+        int singleRuleIndex = getSingleRuleIndex(rules, element->variableIndex, element->ruleIndex);
         if (element->dotIndex == arrlen(rule) && existsInSet(element->allowedFollowSet, symbolIndex)) {
             if (answer != -1) {
-                puts("REDUCE-REDUCE CONFLICT FOUND");
-                return answer;
+                printf("*******************REDUCE-REDUCE CONFLICT FOUND in I%d. Prioritizing the rule that comes earlier ********************\n", itemIndex);
+                if (singleRuleIndex < answer) answer = singleRuleIndex;
             }
-            else answer = getSingleRuleIndex(rules, element->variableIndex, element->ruleIndex);
+            else answer = singleRuleIndex;
         }
     }
     return answer;
@@ -901,14 +902,15 @@ void logItemsAndGotos(FILE *logFile, ItemElement ***items, int **gotos, Symbol *
     int itemIndex;
     fprintf(logFile, "%ld\n", arrlen(items));
     for (itemIndex = 0; itemIndex < arrlen(items); ++itemIndex) {
-        ItemElement **item = items[itemIndex];
         int symbolIndex;
         for (symbolIndex = 1; symbolIndex < arrlen(symbols); ++symbolIndex) {
             if (symbols[symbolIndex].isTerminal) {
                 int shiftValue = gotos[itemIndex][symbolIndex];
-                int reduceValue = getReducer(item, symbolIndex, rules);
+                int reduceValue = getReducer(items, itemIndex, symbolIndex, rules);
                 
-                if (shiftValue >= 0 && reduceValue >= 0) puts("SHIFT-REDUCE CONFLICT FOUND");
+                if (shiftValue >= 0 && reduceValue >= 0) {
+                    printf("*******************SHIFT-REDUCE CONFLICT FOUND in I%d. Prioritizing shift *************\n", itemIndex);
+                }
 
                 if (shiftValue >= 0) fprintf(logFile, "%d ", shiftValue);
                 else {
